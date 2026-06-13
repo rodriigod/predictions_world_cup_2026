@@ -5,14 +5,14 @@
 ### Dieciseisavos
 
 - 2026-06-28 · Corea del Sur **0-1** Suiza → **Suiza** (23%/28%/49%)
-- 2026-06-29 · Ecuador **1-0** Rep. Checa → **Ecuador** (59%/25%/15%)
+- 2026-06-29 · Alemania **2-0** Rep. Checa → **Alemania** (60%/24%/16%)
 - 2026-06-29 · Países Bajos **0-1** Marruecos → **Marruecos** (35%/30%/35%)
 - 2026-06-29 · Brasil **1-0** Japón → **Brasil** (46%/28%/26%)
-- 2026-06-30 · Francia **1-0** EEUU → **Francia** (60%/24%/16%)
-- 2026-06-30 · Alemania **1-2** Noruega → **Noruega** (33%/28%/39%)
-- 2026-06-30 · México **1-0** Costa de Marfil → **México** (65%/23%/11%)
-- 2026-07-01 · Inglaterra **2-0** Arabia S. → **Inglaterra** (79%/15%/6%)
-- 2026-07-01 · Turquía **1-0** Senegal → **Turquía** (38%/29%/33%)
+- 2026-06-30 · Francia **2-0** Escocia → **Francia** (69%/20%/11%)
+- 2026-06-30 · Ecuador **0-1** Noruega → **Noruega** (35%/30%/36%)
+- 2026-06-30 · México **2-0** Arabia S. → **México** (75%/18%/7%)
+- 2026-07-01 · Inglaterra **1-0** Senegal → **Inglaterra** (59%/25%/16%)
+- 2026-07-01 · Turquía **1-0** Costa de Marfil → **Turquía** (53%/26%/21%)
 - 2026-07-01 · Bélgica **1-0** Austria → **Bélgica** (49%/27%/25%)
 - 2026-07-02 · Portugal **1-0** Croacia → **Portugal** (45%/28%/27%)
 - 2026-07-02 · España **2-0** Argelia → **España** (73%/19%/9%)
@@ -22,7 +22,7 @@
 - 2026-07-03 · Australia **1-0** Irán → **Australia** (36%/31%/33%)
 ### Octavos
 
-- 2026-07-04 · Ecuador **0-1** Francia → **Francia** (23%/29%/49%)
+- 2026-07-04 · Alemania **0-1** Francia → **Francia** (21%/26%/53%)
 - 2026-07-04 · Suiza **0-1** Marruecos → **Marruecos** (31%/30%/40%)
 - 2026-07-05 · Brasil **2-1** Noruega → **Brasil** (43%/27%/29%)
 - 2026-07-05 · México **0-1** Inglaterra → **Inglaterra** (28%/32%/40%)

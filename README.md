@@ -104,7 +104,7 @@ files/f0_raw/             # datasets (results, teams, fixtures)
 
 # 🏆 PREDICTED RESULTS — FULL TOURNAMENT
 
-*Pre-tournament prediction (trained only on data before 2026-06-11, no played matches used). Scores are the most likely scoreline consistent with the predicted 1X2 outcome. Regenerate with `python scripts/run_groups_simulation.py --sims 10000`.*
+*Pre-tournament prediction (trained only on data before 2026-06-11, no played matches used). Scores are the most likely scoreline consistent with the predicted 1X2 outcome; **evenly-matched games (|P(1) − P(2)| ≤ 3 pts) are called as draws**. Regenerate with `python scripts/run_groups_simulation.py --sims 10000`.*
 
 ## Group stage — all 72 matches
 
@@ -129,12 +129,12 @@ Table: **México 9** · **Corea del Sur 6** · **Rep. Checa 3 ✦** · Sudáfric
 | Catar – Suiza | **0-2** |
 | Suiza – Bosnia y Her. | **2-0** |
 | Canadá – Catar | **2-0** |
-| Suiza – Canadá | **0-1** |
+| Suiza – Canadá | **1-1** |
 | Bosnia y Her. – Catar | **1-0** |
 
-Table: **Canadá 9** · **Suiza 6** · Bosnia y Her. 3 · Catar 0
+Table: **Canadá 7** · **Suiza 7** · Bosnia y Her. 3 · Catar 0
 
-### Group C — Brasil, Marruecos
+### Group C — Brasil, Marruecos, Escocia ✦
 | Match | Score |
 |---|:-:|
 | Brasil – Marruecos | **1-0** |
@@ -144,21 +144,21 @@ Table: **Canadá 9** · **Suiza 6** · Bosnia y Her. 3 · Catar 0
 | Escocia – Brasil | **0-2** |
 | Marruecos – Haití | **2-0** |
 
-Table: **Brasil 9** · **Marruecos 6** · Escocia 3 · Haití 0
+Table: **Brasil 9** · **Marruecos 6** · **Escocia 3 ✦** · Haití 0
 
-### Group D — Turquía, Australia, EEUU ✦
+### Group D — Turquía, Australia
 | Match | Score |
 |---|:-:|
-| EEUU – Paraguay | **1-0** |
+| EEUU – Paraguay | **1-1** |
 | Australia – Turquía | **0-1** |
-| EEUU – Australia | **0-1** |
+| EEUU – Australia | **1-1** |
 | Turquía – Paraguay | **1-0** |
 | Turquía – EEUU | **2-1** |
 | Paraguay – Australia | **0-1** |
 
-Table: **Turquía 9** · **Australia 6** · **EEUU 3 ✦** · Paraguay 0
+Table: **Turquía 9** · **Australia 4** · EEUU 2 · Paraguay 1
 
-### Group E — Ecuador, Alemania, Costa de Marfil ✦
+### Group E — Alemania, Ecuador, Costa de Marfil ✦
 | Match | Score |
 |---|:-:|
 | Alemania – Curazao | **2-0** |
@@ -166,9 +166,9 @@ Table: **Turquía 9** · **Australia 6** · **EEUU 3 ✦** · Paraguay 0
 | Alemania – Costa de Marfil | **2-0** |
 | Ecuador – Curazao | **2-0** |
 | Curazao – Costa de Marfil | **0-2** |
-| Ecuador – Alemania | **1-0** |
+| Ecuador – Alemania | **1-1** |
 
-Table: **Ecuador 9** · **Alemania 6** · **Costa de Marfil 3 ✦** · Curazao 0
+Table: **Alemania 7** · **Ecuador 7** · **Costa de Marfil 3 ✦** · Curazao 0
 
 ### Group F — Países Bajos, Japón
 | Match | Score |
@@ -260,14 +260,14 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 | Date | Match | Score | Winner |
 |---|---|:-:|---|
 | 28/06 | Corea del Sur – Suiza | 0-1 | **Suiza** |
-| 29/06 | Ecuador – Rep. Checa | 1-0 | **Ecuador** |
+| 29/06 | Alemania – Rep. Checa | 2-0 | **Alemania** |
 | 29/06 | Países Bajos – Marruecos | 0-1 | **Marruecos** |
 | 29/06 | Brasil – Japón | 1-0 | **Brasil** |
-| 30/06 | Francia – EEUU | 1-0 | **Francia** |
-| 30/06 | Alemania – Noruega | 1-2 | **Noruega** |
-| 30/06 | México – Costa de Marfil | 1-0 | **México** |
-| 01/07 | Inglaterra – Arabia S. | 2-0 | **Inglaterra** |
-| 01/07 | Turquía – Senegal | 1-0 | **Turquía** |
+| 30/06 | Francia – Escocia | 2-0 | **Francia** |
+| 30/06 | Ecuador – Noruega | 0-1 | **Noruega** |
+| 30/06 | México – Arabia S. | 2-0 | **México** |
+| 01/07 | Inglaterra – Senegal | 1-0 | **Inglaterra** |
+| 01/07 | Turquía – Costa de Marfil | 1-0 | **Turquía** |
 | 01/07 | Bélgica – Austria | 1-0 | **Bélgica** |
 | 02/07 | Portugal – Croacia | 1-0 | **Portugal** |
 | 02/07 | España – Argelia | 2-0 | **España** |
@@ -279,7 +279,7 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 ### Round of 16 (Octavos)
 | Date | Match | Score | Winner |
 |---|---|:-:|---|
-| 04/07 | Ecuador – Francia | 0-1 | **Francia** |
+| 04/07 | Alemania – Francia | 0-1 | **Francia** |
 | 04/07 | Suiza – Marruecos | 0-1 | **Marruecos** |
 | 05/07 | Brasil – Noruega | 2-1 | **Brasil** |
 | 05/07 | México – Inglaterra | 0-1 | **Inglaterra** |
@@ -334,7 +334,7 @@ Francia **1-0** Inglaterra → **Francia** 🥉
 | 11/06 | A | México – Sudáfrica | 2-0 | 2-0 | ✅ 5 |
 | 11/06 | A | Corea del Sur – Rep. Checa | 1-0 | 2-1 | ✅ 3 |
 | 12/06 | B | Canadá – Bosnia y Her. | 2-0 | 1-1 | ❌ 0 |
-| 12/06 | D | EEUU – Paraguay | 1-0 | 4-1 | ✅ 3 |
+| 12/06 | D | EEUU – Paraguay | 1-1 | 4-1 | ❌ 0 |
 | 13/06 | B | Catar – Suiza | 0-2 |  |  |
 | 13/06 | C | Brasil – Marruecos | 1-0 |  |  |
 | 13/06 | C | Haití – Escocia | 0-1 |  |  |
@@ -359,7 +359,7 @@ Francia **1-0** Inglaterra → **Francia** 🥉
 | 18/06 | B | Suiza – Bosnia y Her. | 2-0 |  |  |
 | 18/06 | B | Canadá – Catar | 2-0 |  |  |
 | 18/06 | A | México – Corea del Sur | 1-0 |  |  |
-| 19/06 | D | EEUU – Australia | 0-1 |  |  |
+| 19/06 | D | EEUU – Australia | 1-1 |  |  |
 | 19/06 | C | Escocia – Marruecos | 0-2 |  |  |
 | 19/06 | C | Brasil – Haití | 2-0 |  |  |
 | 19/06 | D | Turquía – Paraguay | 1-0 |  |  |
@@ -379,14 +379,14 @@ Francia **1-0** Inglaterra → **Francia** 🥉
 | 23/06 | L | Inglaterra – Ghana | 2-0 |  |  |
 | 23/06 | L | Panamá – Croacia | 0-1 |  |  |
 | 23/06 | K | Colombia – RD Congo | 2-0 |  |  |
-| 24/06 | B | Suiza – Canadá | 0-1 |  |  |
+| 24/06 | B | Suiza – Canadá | 1-1 |  |  |
 | 24/06 | B | Bosnia y Her. – Catar | 1-0 |  |  |
 | 24/06 | C | Marruecos – Haití | 2-0 |  |  |
 | 24/06 | C | Escocia – Brasil | 0-2 |  |  |
 | 24/06 | A | Sudáfrica – Corea del Sur | 0-2 |  |  |
 | 24/06 | A | Rep. Checa – México | 0-1 |  |  |
 | 25/06 | E | Curazao – Costa de Marfil | 0-2 |  |  |
-| 25/06 | E | Ecuador – Alemania | 1-0 |  |  |
+| 25/06 | E | Ecuador – Alemania | 1-1 |  |  |
 | 25/06 | F | Túnez – Países Bajos | 0-2 |  |  |
 | 25/06 | F | Japón – Suecia | 2-0 |  |  |
 | 25/06 | D | Paraguay – Australia | 0-1 |  |  |
@@ -404,7 +404,7 @@ Francia **1-0** Inglaterra → **Francia** 🥉
 | 27/06 | J | Argelia – Austria | 1-0 |  |  |
 | 27/06 | J | Jordania – Argentina | 0-2 |  |  |
 
-**Running total: 11 / 20** · exact scores: 1/4 · outcomes: 2/4 · played: 4/72
+**Running total: 8 / 20** · exact scores: 1/4 · outcomes: 1/4 · played: 4/72
 
 ---
 

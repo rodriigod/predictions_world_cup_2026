@@ -398,9 +398,26 @@ class GroupStageSimulator:
         most_likely = [t.scores.most_common(1)[0] for t in tallies]
         matches["most_likely_score"] = [f"{s[0][0]}-{s[0][1]}" for s in most_likely]
         matches["p_most_likely_score"] = [s[1] / n_sims for s in most_likely]
-        matches["pred_result"] = [
-            "1" if t.win_a >= max(t.draw, t.win_b)
-            else ("X" if t.draw >= t.win_b else "2") for t in tallies]
+        # resultado 1X2 más probable de cada partido
+        def _most_likely(t):
+            return ("1" if t.win_a >= max(t.draw, t.win_b)
+                    else ("X" if t.draw >= t.win_b else "2"))
+        # "Empate técnico": cuando ganar le es casi igual de probable a
+        # ambos lados (|P(1) - P(2)| <= DRAW_MARGIN_PP puntos porcentuales,
+        # medidos como se muestran en el reporte), el partido se marca como
+        # empate aunque haya un favorito leve. No aplica a partidos ya
+        # jugados (resultado real fijo).
+        DRAW_MARGIN_PP = 3
+        pred_result = []
+        for i, t in enumerate(tallies):
+            r = _most_likely(t)
+            if i not in self._fixed and r != "X":
+                diff_pp = abs(round(100 * t.win_a / n_sims)
+                              - round(100 * t.win_b / n_sims))
+                if diff_pp <= DRAW_MARGIN_PP:
+                    r = "X"
+            pred_result.append(r)
+        matches["pred_result"] = pred_result
         # marcador pronosticado: el más frecuente CONDICIONADO al
         # resultado 1X2 pronosticado (consistente para llenar la polla)
         pred_scores = [

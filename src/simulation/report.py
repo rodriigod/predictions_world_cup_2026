@@ -96,16 +96,54 @@ def full_report(matches: pd.DataFrame, standings: pd.DataFrame,
     return "\n".join(header) + "\n" + "\n---\n\n".join(parts)
 
 
+def _polla_standings(matches: pd.DataFrame) -> dict:
+    """Tabla de posiciones determinística calculada SOLO desde los
+    marcadores pronosticados de la polla (3 pts victoria, 1 empate),
+    agrupada por grupo. Devuelve {grupo: [filas ordenadas]}."""
+    teams: dict = {}
+    for fx in matches.itertuples():
+        ga, gb = map(int, fx.pred_score.split("-"))
+        for team in (fx.team_a, fx.team_b):
+            teams.setdefault(team, {"team": team, "group": fx.group,
+                                    "pj": 0, "pts": 0, "gf": 0, "gc": 0})
+        a, b = teams[fx.team_a], teams[fx.team_b]
+        a["pj"] += 1
+        b["pj"] += 1
+        a["gf"] += ga
+        a["gc"] += gb
+        b["gf"] += gb
+        b["gc"] += ga
+        if ga > gb:
+            a["pts"] += 3
+        elif gb > ga:
+            b["pts"] += 3
+        else:
+            a["pts"] += 1
+            b["pts"] += 1
+    by_group: dict = {}
+    for row in teams.values():
+        row["dg"] = row["gf"] - row["gc"]
+        by_group.setdefault(row["group"], []).append(row)
+    for g in by_group:
+        by_group[g].sort(key=lambda r: (r["pts"], r["dg"], r["gf"]),
+                         reverse=True)
+    return by_group
+
+
 def polla_sheet(matches: pd.DataFrame) -> str:
     """La polla lista para llenar: los 72 marcadores pronosticados,
-    en el mismo orden del PDF (por grupo y jornada)."""
+    en el mismo orden del PDF (por grupo y jornada), más la tabla de
+    posiciones que resulta de esos marcadores."""
     lines = [
         "# ✍️ MI POLLA — Mundial 2026, Fase de Grupos",
         "",
         "Marcador pronosticado por el modelo para cada casilla "
-        "(el más probable condicionado al resultado 1X2 predicho).",
+        "(el más probable condicionado al resultado 1X2 predicho). "
+        "Los partidos parejos (|P(1) − P(2)| ≤ 3 pts) se marcan como "
+        "empate.",
         "",
     ]
+    standings = _polla_standings(matches)
     for g in sorted(matches["group"].unique()):
         lines.append(f"## Grupo {g}")
         lines.append("")
@@ -114,6 +152,14 @@ def polla_sheet(matches: pd.DataFrame) -> str:
             lines.append(
                 f"- {_fmt_date(fx.date, fx.time)} · "
                 f"{fx.team_a} **[{ga}] - [{gb}]** {fx.team_b}")
+        lines.append("")
+        lines.append("| Pos | Equipo | PJ | Pts | GF | GC | DG |")
+        lines.append("|:-:|---|:-:|:-:|:-:|:-:|:-:|")
+        for pos, r in enumerate(standings[g], start=1):
+            dg = f"+{r['dg']}" if r["dg"] > 0 else str(r["dg"])
+            lines.append(
+                f"| {pos} | {r['team']} | {r['pj']} | **{r['pts']}** "
+                f"| {r['gf']} | {r['gc']} | {dg} |")
         lines.append("")
     return "\n".join(lines)
 

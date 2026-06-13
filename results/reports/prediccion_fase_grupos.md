@@ -42,7 +42,7 @@ P(1) = gana el primer equipo · P(X) = empate · P(2) = gana el segundo equipo.
 | J1 | SÁB 13/06 15:00 | Catar vs **Suiza** | Gana Suiza 0-2 | 5% | 14% | 81% | 0.5 - 2.6 |
 | J2 | JUE 18/06 15:00 | **Suiza** vs Bosnia y Her. | Gana Suiza 2-0 | 72% | 18% | 10% | 2.4 - 0.8 |
 | J2 | JUE 18/06 18:00 | **Canadá** vs Catar | Gana Canadá 2-0 | 81% | 14% | 5% | 2.5 - 0.5 |
-| J3 | MIÉ 24/06 15:00 | Suiza vs **Canadá** | Gana Canadá 0-1 | 33% | 31% | 36% | 1.1 - 1.1 |
+| J3 | MIÉ 24/06 15:00 | Suiza vs Canadá | Empate 1-1 | 33% | 31% | 36% | 1.1 - 1.1 |
 | J3 | MIÉ 24/06 15:00 | **Bosnia y Her.** vs Catar | Gana Bosnia y Her. 1-0 | 53% | 26% | 21% | 1.8 - 1.1 |
 
 P(1) = gana el primer equipo · P(X) = empate · P(2) = gana el segundo equipo.
@@ -90,9 +90,9 @@ P(1) = gana el primer equipo · P(X) = empate · P(2) = gana el segundo equipo.
 
 | Jornada | Fecha | Partido | 🎯 Pronóstico | P(1) | P(X) | P(2) | Goles esperados |
 |:-:|---|---|---|:-:|:-:|:-:|:-:|
-| J1 | VIE 12/06 21:00 | **EEUU** vs Paraguay | Gana EEUU 1-0 | 37% | 30% | 34% | 1.2 - 1.1 |
+| J1 | VIE 12/06 21:00 | EEUU vs Paraguay | Empate 1-1 | 37% | 30% | 34% | 1.2 - 1.1 |
 | J1 | DOM 14/06 00:00 | Australia vs **Turquía** | Gana Turquía 0-1 | 32% | 29% | 38% | 1.2 - 1.3 |
-| J2 | VIE 19/06 15:00 | EEUU vs **Australia** | Gana Australia 0-1 | 35% | 28% | 37% | 1.3 - 1.3 |
+| J2 | VIE 19/06 15:00 | EEUU vs Australia | Empate 1-1 | 35% | 28% | 37% | 1.3 - 1.3 |
 | J2 | VIE 19/06 23:00 | **Turquía** vs Paraguay | Gana Turquía 1-0 | 41% | 28% | 31% | 1.4 - 1.2 |
 | J3 | JUE 25/06 22:00 | **Turquía** vs EEUU | Gana Turquía 2-1 | 40% | 28% | 33% | 1.5 - 1.3 |
 | J3 | JUE 25/06 22:00 | Paraguay vs **Australia** | Gana Australia 0-1 | 33% | 29% | 38% | 1.2 - 1.3 |
@@ -121,7 +121,7 @@ P(1) = gana el primer equipo · P(X) = empate · P(2) = gana el segundo equipo.
 | J2 | SÁB 20/06 16:00 | **Alemania** vs Costa de Marfil | Gana Alemania 2-0 | 61% | 22% | 17% | 1.9 - 0.9 |
 | J2 | SÁB 20/06 20:00 | **Ecuador** vs Curazao | Gana Ecuador 2-0 | 76% | 17% | 7% | 2.4 - 0.6 |
 | J3 | JUE 25/06 16:00 | Curazao vs **Costa de Marfil** | Gana Costa de Marfil 0-2 | 18% | 22% | 59% | 1.0 - 2.0 |
-| J3 | JUE 25/06 16:00 | **Ecuador** vs Alemania | Gana Ecuador 1-0 | 37% | 29% | 34% | 1.2 - 1.2 |
+| J3 | JUE 25/06 16:00 | Ecuador vs Alemania | Empate 1-1 | 37% | 29% | 34% | 1.2 - 1.2 |
 
 P(1) = gana el primer equipo · P(X) = empate · P(2) = gana el segundo equipo.
 
