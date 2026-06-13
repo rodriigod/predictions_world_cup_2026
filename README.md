@@ -334,7 +334,7 @@ Francia **1-0** Inglaterra → **Francia** 🥉
 | 11/06 | A | México – Sudáfrica | 2-0 | 2-0 | ✅ 5 |
 | 11/06 | A | Corea del Sur – Rep. Checa | 1-0 | 2-1 | ✅ 3 |
 | 12/06 | B | Canadá – Bosnia y Her. | 2-0 | 1-1 | ❌ 0 |
-| 12/06 | D | EEUU – Paraguay | 1-0 | 2-0 | ✅ 3 |
+| 12/06 | D | EEUU – Paraguay | 1-0 | 4-1 | ✅ 3 |
 | 13/06 | B | Catar – Suiza | 0-2 |  |  |
 | 13/06 | C | Brasil – Marruecos | 1-0 |  |  |
 | 13/06 | C | Haití – Escocia | 0-1 |  |  |
@@ -404,7 +404,7 @@ Francia **1-0** Inglaterra → **Francia** 🥉
 | 27/06 | J | Argelia – Austria | 1-0 |  |  |
 | 27/06 | J | Jordania – Argentina | 0-2 |  |  |
 
-**Running total: 11 / 20** · exact scores: 1/4 · outcomes: 3/4 · played: 4/72
+**Running total: 11 / 20** · exact scores: 1/4 · outcomes: 2/4 · played: 4/72
 
 ---
 
