@@ -1,0 +1,6 @@
+# Raw data files go here
+# Columnas esperadas: 
+# - feature1, feature2, feature3, ..., target
+
+# Este directorio contiene datos sin procesar
+# Agregua aquí tus archivos CSV, Excel, Parquet, etc.

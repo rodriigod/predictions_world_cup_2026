@@ -1,0 +1,170 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║              🤖 ML PROJECT TEMPLATE - MAPA VISUAL                         ║
+║                  Plantilla profesional de Machine Learning                ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+📊 FLUJO DE DATOS (files/)
+═════════════════════════════════════════════════════════════════════════
+
+    ┌─────────────┐         ┌──────────────┐         ┌─────────────────┐
+    │  f0_raw     │    →    │  f1_input    │    →    │  f2_intermedia  │
+    │ (Original)  │         │  (Limpio)    │         │    (Features)   │
+    └─────────────┘         └──────────────┘         └─────────────────┘
+           ↓                      ↓                           ↓
+    • Datos sin               • Validado                 • Escalado
+      procesar                • Duplicados               • Encoded
+    • Variables               • NaN manejados            • Features
+      faltantes                                         • Engineered
+    
+                                                            ↓
+                                                    ┌───────────────┐
+                                                    │ Entrenamiento │
+                                                    └───────────────┘
+                                                            ↓
+                                                    ┌───────────────┐
+                                                    │  f3_output    │
+                                                    │ (Predicciones)│
+                                                    └───────────────┘
+
+📚 NOTEBOOKS (Análisis Interactivo)
+═════════════════════════════════════════════════════════════════════════
+
+  01_data_exploration.ipynb
+     ├─ Cargar datos
+     ├─ Estadísticas
+     ├─ Distribuciones
+     └─ Correlaciones
+
+  02_data_cleaning.ipynb
+     ├─ Manejar NaN
+     ├─ Remover duplicados
+     ├─ Detectar outliers
+     └─ Conversión de tipos
+
+  03_feature_engineering.ipynb
+     ├─ Features polinomiales
+     ├─ Interacciones
+     ├─ Scaling/Encoding
+     └─ Ratios personalizados
+
+  04_eda.ipynb
+     ├─ Análisis profundo
+     ├─ Skewness/Kurtosis
+     ├─ Box plots
+     └─ Heatmaps
+
+  05_model_training.ipynb
+     ├─ Baseline models
+     ├─ Advanced models
+     ├─ Cross validation
+     └─ Comparación
+
+  06_model_evaluation.ipynb
+     ├─ Métricas
+     ├─ Confusion matrix
+     ├─ Feature importance
+     └─ Overfitting check
+
+  07_results_visualization.ipynb
+     ├─ Reportes
+     ├─ Gráficos
+     ├─ Comparación de modelos
+     └─ Conclusiones
+
+💻 CÓDIGO REUTILIZABLE (src/)
+═════════════════════════════════════════════════════════════════════════
+
+  src/data/
+    ├─ loader.py                    ← Cargar CSV, Excel, Parquet
+    ├─ preprocessor.py              ← Limpieza y transformación
+    └─ features.py                  ← Feature engineering
+
+  src/models/
+    ├─ baseline.py                  ← RF, DT, LR (modelos simples)
+    └─ advanced.py                  ← GB, SVM, KNN (modelos complejos)
+
+  src/utils/
+    ├─ metrics.py                   ← Accuracy, F1, ROC-AUC, MSE...
+    └─ visualization.py             ← Plots, confusion matrix, etc.
+
+🔧 SCRIPTS EJECUTABLES (scripts/)
+═════════════════════════════════════════════════════════════════════════
+
+  config.py               → Configuración global
+  preprocess.py           → python scripts/preprocess.py
+  train.py                → python scripts/train.py
+  predict.py              → python scripts/predict.py --input <file>
+  evaluate.py             → python scripts/evaluate.py
+
+⚙️ CONFIGURACIÓN
+═════════════════════════════════════════════════════════════════════════
+
+  config/config.yaml      → Parámetros principales
+                            • Rutas de datos
+                            • Hiperparámetros
+                            • Seeds (reproducibilidad)
+
+  .env.example            → Variables de entorno
+
+📦 OTROS ARCHIVOS
+═════════════════════════════════════════════════════════════════════════
+
+  requirements.txt        → Todas las dependencias (50+ librerías)
+  setup.py                → Para instalar como paquete Python
+  tests/                  → Tests unitarios de ejemplo
+  models/                 → Modelos guardados (.pkl, .h5)
+  results/                → Resultados y métricas
+
+📖 DOCUMENTACIÓN
+═════════════════════════════════════════════════════════════════════════
+
+  README.md               → Visión general (este proyecto)
+  QUICK_START.md          → Guía rápida de inicio
+  ESTRUCTURA.md           → Documentación detallada
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                        CÓMO EMPEZAR (3 PASOS)                            ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+  1️⃣  INSTALAR DEPENDENCIAS
+      $ python -m venv venv
+      $ source venv/bin/activate
+      $ pip install -r requirements.txt
+
+  2️⃣  ABRIR NOTEBOOKS
+      $ jupyter lab
+      
+  3️⃣  SEGUIR ORDEN 01→07
+      • Cada notebook tiene ejemplos listos para usar
+      • Personaliza según tu dataset
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                    CARACTERÍSTICAS PRINCIPALES                           ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+  ✅ Organización clara (fases + tipos)
+  ✅ 7 notebooks step-by-step
+  ✅ Módulos reutilizables en src/
+  ✅ Scripts automatizados
+  ✅ Configuración centralizada
+  ✅ Ejemplos de múltiples modelos
+  ✅ Métricas de evaluación
+  ✅ Visualizaciones profesionales
+  ✅ Tests unitarios
+  ✅ Documentación completa
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                   SIGUIENTES PASOS                                       ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+  □ Leer README.md
+  □ Seguir QUICK_START.md
+  □ Ejecutar 01_data_exploration.ipynb
+  □ Cargar tu dataset en files/f0_raw/
+  □ Adaptar notebooks a tu caso de uso
+  □ Entrenar modelos
+  □ Evaluar resultados
+
+───────────────────────────────────────────────────────────────────────────
+               ¡Plantilla lista para usar! 🚀
+───────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,78 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Data files (large)
+files/f0_raw/**/*.csv
+files/f0_raw/**/*.xlsx
+files/f0_raw/**/*.parquet
+files/f1_input/**/*.csv
+files/f1_input/**/*.parquet
+files/f2_intermedia/**/*.csv
+files/f3_output/**/*.csv
+
+# Models (large)
+models/**/*.pkl
+models/**/*.joblib
+models/**/*.h5
+models/**/*.pth
+
+# Results
+results/**/*.csv
+results/**/*.pkl
+logs/
+
+# Environment variables
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

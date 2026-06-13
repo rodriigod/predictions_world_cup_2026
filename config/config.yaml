@@ -1,0 +1,121 @@
+# ============================================================
+# ML Project Configuration
+# ============================================================
+
+# Project Settings
+project:
+  name: "ML Project"
+  version: "1.0.0"
+  random_seed: 42
+  verbose: true
+
+# Data Paths
+paths:
+  raw_data: "./files/f0_raw"
+  input_data: "./files/f1_input"
+  intermediate_data: "./files/f2_intermedia"
+  output_data: "./files/f3_output"
+  models_dir: "./models"
+  results_dir: "./results"
+  logs_dir: "./logs"
+
+# Data Configuration
+data:
+  target_column: "target"
+  categorical_features:
+    - "feature1"
+    - "feature2"
+  numerical_features:
+    - "feature3"
+    - "feature4"
+  test_size: 0.2
+  validation_size: 0.1
+  stratified: true
+
+# Feature Engineering
+features:
+  scaling:
+    method: "standard"  # standard, minmax, robust
+    fit_on_train: true
+  encoding:
+    method: "onehot"    # onehot, label, ordinal
+  handle_missing:
+    method: "mean"      # mean, median, forward_fill, drop
+    threshold: 0.5      # % máximo de valores faltantes
+
+# Model Configuration
+model:
+  type: "random_forest"  # random_forest, xgboost, neural_network, etc.
+  hyperparameters:
+    n_estimators: 100
+    max_depth: 10
+    learning_rate: 0.1
+    random_state: 42
+  
+  # Para modelos específicos
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    min_samples_split: 5
+    random_state: 42
+  
+  xgboost:
+    n_estimators: 100
+    learning_rate: 0.1
+    max_depth: 6
+    random_state: 42
+  
+  neural_network:
+    layers: [128, 64, 32]
+    activation: "relu"
+    dropout: 0.3
+    batch_size: 32
+    epochs: 100
+    learning_rate: 0.001
+
+# Training Configuration
+training:
+  batch_size: 32
+  epochs: 100
+  learning_rate: 0.001
+  validation_split: 0.1
+  early_stopping:
+    enabled: true
+    patience: 10
+    min_delta: 0.001
+  
+  # Optimizador para redes neuronales
+  optimizer: "adam"  # adam, sgd, rmsprop
+  loss: "mse"        # mse, mae, binary_crossentropy
+
+# Evaluation Metrics
+evaluation:
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "roc_auc"
+  
+  classification:
+    threshold: 0.5
+    average: "weighted"
+  
+  regression:
+    metrics:
+      - "mse"
+      - "rmse"
+      - "mae"
+      - "r2"
+
+# Logging & Monitoring
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "./logs/project.log"
+
+# Reproducibility
+reproducibility:
+  random_seed: 42
+  set_all_seeds: true
+  use_deterministic: true
