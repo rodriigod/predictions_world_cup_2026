@@ -1,0 +1,249 @@
+"""Dataset de entrenamiento REAL desde partidos internacionales históricos.
+
+Fuente: files/f0_raw/international_results.csv (github.com/martj42/
+international_results, ~49k partidos 1872-2026, incluye el fixture del
+Mundial 2026 con los partidos ya jugados).
+
+Qué hace este módulo (papers Maher 1982 / Dixon-Coles 1997):
+1. Calcula un ELO propio partido a partido (K según importancia del
+   torneo, bonus de localía, multiplicador por goleada) — las "fuerzas
+   de ataque/defensa" latentes de Maher quedan capturadas por el ELO y
+   las medias móviles.
+2. Features rodantes anti-leakage: para cada partido usa SOLO partidos
+   anteriores (forma últimos 5, goles a favor/en contra últimos 10 como
+   proxy de xG, días de descanso).
+3. Decaimiento temporal de Dixon-Coles: cada fila lleva un peso
+   w = exp(-años_transcurridos / HALF_LIFE) * peso_torneo, que el
+   modelo usa como sample_weight (partidos recientes e importantes
+   pesan más).
+
+NOTA de features: valor de mercado, caps, experiencia mundialista y
+lesiones no existen históricamente, así que se fijan en neutro (0) en
+entrenamiento E inferencia del modo histórico — el modelo real se apoya
+en ELO + forma + goles, que es lo que la literatura reporta como las
+variables de mayor importancia.
+"""
+
+from collections import deque
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from .wc_schema import FEATURE_NAMES, build_match_features
+
+RESULTS_CSV = Path(__file__).resolve().parents[2] / "files/f0_raw/international_results.csv"
+
+TRAIN_FROM = "1995-01-01"   # las filas de entrenamiento parten aquí
+WARMUP_FROM = "1980-01-01"  # el ELO/forma se calculan desde aquí
+DECAY_HALF_LIFE_YEARS = 8.0  # peso 0.5 a los ~5.5 años (exp decay /8)
+
+# Nombre en español (polla) -> nombre del dataset
+NAME_MAP = {
+    "México": "Mexico", "Sudáfrica": "South Africa",
+    "Corea del Sur": "South Korea", "Rep. Checa": "Czech Republic",
+    "Canadá": "Canada", "Bosnia y Her.": "Bosnia and Herzegovina",
+    "Catar": "Qatar", "Suiza": "Switzerland", "Brasil": "Brazil",
+    "Marruecos": "Morocco", "Haití": "Haiti", "Escocia": "Scotland",
+    "EEUU": "United States", "Paraguay": "Paraguay",
+    "Australia": "Australia", "Turquía": "Turkey", "Alemania": "Germany",
+    "Curazao": "Curaçao", "Costa de Marfil": "Ivory Coast",
+    "Ecuador": "Ecuador", "Países Bajos": "Netherlands", "Japón": "Japan",
+    "Suecia": "Sweden", "Túnez": "Tunisia", "Bélgica": "Belgium",
+    "Egipto": "Egypt", "Irán": "Iran", "Nueva Zelanda": "New Zealand",
+    "España": "Spain", "Cabo Verde": "Cape Verde",
+    "Arabia S.": "Saudi Arabia", "Uruguay": "Uruguay",
+    "Francia": "France", "Senegal": "Senegal", "Irak": "Iraq",
+    "Noruega": "Norway", "Argentina": "Argentina", "Argelia": "Algeria",
+    "Austria": "Austria", "Jordania": "Jordan", "Portugal": "Portugal",
+    "RD Congo": "DR Congo", "Uzbekistán": "Uzbekistan",
+    "Colombia": "Colombia", "Inglaterra": "England", "Croacia": "Croatia",
+    "Ghana": "Ghana", "Panamá": "Panama",
+}
+
+
+def _k_factor(tournament: str) -> float:
+    t = tournament.lower()
+    if t == "fifa world cup":
+        return 60.0
+    if "qualification" in t:
+        return 40.0
+    if t == "friendly":
+        return 20.0
+    return 40.0  # continentales, Nations League, etc.
+
+
+def _tournament_weight(tournament: str) -> float:
+    t = tournament.lower()
+    if t == "fifa world cup":
+        return 1.5
+    if t == "friendly":
+        return 0.7
+    return 1.2
+
+
+def _goal_mult(diff: int) -> float:
+    if diff <= 1:
+        return 1.0
+    if diff == 2:
+        return 1.5
+    return 1.75 + (diff - 3) / 8.0
+
+
+class _TeamHistory:
+    __slots__ = ("elo", "gf10", "ga10", "pts5", "last_date", "n_matches",
+                 "wc_matches_in")
+
+    def __init__(self):
+        self.elo = 1500.0
+        self.gf10: deque = deque(maxlen=10)
+        self.ga10: deque = deque(maxlen=10)
+        self.pts5: deque = deque(maxlen=5)
+        self.last_date: pd.Timestamp | None = None
+        self.n_matches = 0
+        self.wc_matches_in: dict = {}   # año WC -> partidos jugados en él
+
+
+def _neutral_series(name_es_or_team: str, h: "_TeamHistory",
+                    is_host: float = 0.0) -> pd.Series:
+    """Serie con TEAM_COLUMNS para build_match_features, con los campos
+    sin dato histórico en neutro."""
+    return pd.Series({
+        "elo": h.elo,
+        "xg_for_last10": float(np.mean(h.gf10)) if h.gf10 else 1.25,
+        "xg_against_last10": float(np.mean(h.ga10)) if h.ga10 else 1.25,
+        "form_last5_points_pct": (float(np.mean(h.pts5)) / 3.0
+                                  if h.pts5 else 0.5),
+        "market_value_meur": 1.0,            # log(1)=0 -> neutro
+        "avg_caps": 0.0,
+        "players_with_wc_experience": 0.0,
+        "injury_impact_index": 0.0,
+        "is_host": is_host,
+        "distance_avg_km": 0.0,
+    })
+
+
+def load_results() -> pd.DataFrame:
+    df = pd.read_csv(RESULTS_CSV, parse_dates=["date"])
+    df = df[df["date"] >= WARMUP_FROM].reset_index(drop=True)
+    return df
+
+
+def build_historical_dataset(cutoff: str | None = None) -> dict:
+    """Recorre la historia una sola vez y devuelve:
+
+    - X, y, w           : filas equipo-partido para el modelo de Poisson
+    - X_match, y_result, w_match : filas partido para el clasificador 1X2
+    - snapshots         : estado actual (_TeamHistory) por equipo
+    - played_wc         : partidos del Mundial 2026 ya jugados
+
+    `cutoff`: si se entrega (ej. "2026-06-11"), los partidos desde esa
+    fecha se IGNORAN por completo (ni entrenan, ni actualizan el ELO,
+    ni quedan fijos) — simula la foto pre-torneo.
+    """
+    df = load_results()
+    if cutoff is not None:
+        df = df[df["date"] < pd.Timestamp(cutoff)].reset_index(drop=True)
+    hist: dict[str, _TeamHistory] = {}
+    rows, goals, weights = [], [], []
+    m_rows, m_labels, m_weights = [], [], []
+    played_wc = []
+
+    train_from = pd.Timestamp(TRAIN_FROM)
+    t_max = df.loc[df["home_score"].notna(), "date"].max()
+
+    for r in df.itertuples():
+        ha = hist.setdefault(r.home_team, _TeamHistory())
+        hb = hist.setdefault(r.away_team, _TeamHistory())
+        is_wc = r.tournament == "FIFA World Cup"
+
+        if pd.isna(r.home_score):
+            continue  # fixture futuro (Mundial 2026): no entrena
+        gh, ga_ = int(r.home_score), int(r.away_score)
+
+        if is_wc and r.date >= pd.Timestamp("2026-06-01"):
+            played_wc.append((r.home_team, r.away_team, gh, ga_))
+
+        # ---- jornada del grupo en mundiales (1-3; 0 = no aplica) ----
+        if is_wc:
+            year = r.date.year
+            md_a = min(ha.wc_matches_in.get(year, 0) + 1, 3)
+            md_b = min(hb.wc_matches_in.get(year, 0) + 1, 3)
+            matchday = min(md_a, md_b) if max(md_a, md_b) <= 3 else 0
+        else:
+            matchday = 0
+
+        # ---- features ANTES de actualizar el estado (anti-leakage) ----
+        usable = (r.date >= train_from
+                  and ha.n_matches >= 10 and hb.n_matches >= 10)
+        if usable:
+            host_a = 0.0 if r.neutral else 1.0
+            rest_a = (min((r.date - ha.last_date).days, 60)
+                      if ha.last_date is not None else 30)
+            rest_b = (min((r.date - hb.last_date).days, 60)
+                      if hb.last_date is not None else 30)
+            sa = _neutral_series(r.home_team, ha, is_host=host_a)
+            sb = _neutral_series(r.away_team, hb, is_host=0.0)
+            fa = build_match_features(sa, sb, matchday, rest_a - rest_b)
+            fb = build_match_features(sb, sa, matchday, rest_b - rest_a)
+            w = (np.exp(-(t_max - r.date).days / 365.25
+                        / DECAY_HALF_LIFE_YEARS)
+                 * _tournament_weight(r.tournament))
+            rows.extend([fa, fb]); goals.extend([gh, ga_])
+            weights.extend([w, w])
+            m_rows.append(fa)
+            m_labels.append("1" if gh > ga_ else ("2" if gh < ga_ else "X"))
+            m_weights.append(w)
+
+        # ---- actualizar ELO y rodantes ----
+        k = _k_factor(r.tournament) * _goal_mult(abs(gh - ga_))
+        home_adv = 0.0 if r.neutral else 100.0
+        we_a = 1.0 / (1.0 + 10 ** (-(ha.elo + home_adv - hb.elo) / 400.0))
+        score_a = 1.0 if gh > ga_ else (0.5 if gh == ga_ else 0.0)
+        delta = k * (score_a - we_a)
+        ha.elo += delta; hb.elo -= delta
+        ha.gf10.append(gh); ha.ga10.append(ga_)
+        hb.gf10.append(ga_); hb.ga10.append(gh)
+        ha.pts5.append(3 if gh > ga_ else (1 if gh == ga_ else 0))
+        hb.pts5.append(3 if ga_ > gh else (1 if gh == ga_ else 0))
+        ha.last_date = r.date; hb.last_date = r.date
+        ha.n_matches += 1; hb.n_matches += 1
+        if is_wc:
+            year = r.date.year
+            ha.wc_matches_in[year] = ha.wc_matches_in.get(year, 0) + 1
+            hb.wc_matches_in[year] = hb.wc_matches_in.get(year, 0) + 1
+
+    return {
+        "X": pd.DataFrame(rows, columns=FEATURE_NAMES),
+        "y": pd.Series(goals, name="goals_scored"),
+        "w": np.array(weights),
+        "X_match": pd.DataFrame(m_rows, columns=FEATURE_NAMES),
+        "y_result": pd.Series(m_labels, name="result_1x2"),
+        "w_match": np.array(m_weights),
+        "snapshots": hist,
+        "played_wc": played_wc,
+    }
+
+
+def teams_table_from_history(snapshots: dict,
+                             teams_csv: pd.DataFrame) -> pd.DataFrame:
+    """Tabla de equipos 2026 con el estado calculado desde la historia
+    (ELO propio, goles/forma reales) y campos sin histórico en neutro,
+    consistente con el entrenamiento."""
+    rows = []
+    for r in teams_csv.itertuples():
+        en = NAME_MAP[r.team]
+        h = snapshots[en]
+        s = _neutral_series(en, h, is_host=float(r.is_host))
+        rows.append({"team": r.team, "group": r.group, "confed": r.confed,
+                     **s.to_dict()})
+    return pd.DataFrame(rows)
+
+
+def played_results_es(played_wc: list) -> pd.DataFrame:
+    """Resultados ya jugados del Mundial, con nombres en español."""
+    inv = {v: k for k, v in NAME_MAP.items()}
+    return pd.DataFrame(
+        [(inv[a], inv[b], ga, gb) for a, b, ga, gb in played_wc
+         if a in inv and b in inv],
+        columns=["team_a", "team_b", "goals_a", "goals_b"])
