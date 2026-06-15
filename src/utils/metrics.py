@@ -6,6 +6,7 @@ from sklearn.metrics import (
     mean_squared_error, mean_absolute_error, r2_score
 )
 import numpy as np
+import pandas as pd
 
 
 class ModelMetrics:
@@ -59,6 +60,60 @@ class ModelMetrics:
     def get_confusion_matrix(y_true, y_pred):
         """Get confusion matrix"""
         return confusion_matrix(y_true, y_pred)
+
+    # ---- Métricas de forecasting probabilístico (fútbol 1X2) -----------
+    # Estándar en la literatura para evaluar pronósticos V/E/D con su
+    # probabilidad. Habilitan el backtest multi-Mundial (TIER 1 del plan).
+
+    @staticmethod
+    def multiclass_logloss(y_true, proba, classes, eps: float = 1e-15):
+        """Log-loss multiclase, respetando el orden de columnas de `proba`
+        dado por `classes` (no asume orden lexicográfico como sklearn).
+        Menor = mejor."""
+        classes = list(classes)
+        col = {c: i for i, c in enumerate(classes)}
+        idx = np.array([col[v] for v in y_true])
+        p = np.clip(np.asarray(proba, dtype=float), eps, 1.0)
+        return float(-np.mean(np.log(p[np.arange(len(idx)), idx])))
+
+    @staticmethod
+    def rps(y_true_idx, proba):
+        """Rank Probability Score — métrica estándar en forecasting de
+        fútbol: respeta el ORDEN V/E/D (penaliza menos confundir V-E que
+        V-D). `y_true_idx`: índice (0..k-1) de la clase real en el mismo
+        orden que las columnas de `proba` (n, k). Menor = mejor."""
+        proba = np.asarray(proba, dtype=float)
+        n_classes = proba.shape[1]
+        cum_proba = np.cumsum(proba, axis=1)
+        cum_true = np.cumsum(np.eye(n_classes)[np.asarray(y_true_idx)], axis=1)
+        return float(np.mean(np.sum((cum_proba - cum_true) ** 2, axis=1)
+                             / (n_classes - 1)))
+
+    @staticmethod
+    def brier_multiclass(y_true_idx, proba):
+        """Brier score multiclase (suma de errores cuadráticos por clase),
+        promediado por partido. Menor = mejor."""
+        proba = np.asarray(proba, dtype=float)
+        onehot = np.eye(proba.shape[1])[np.asarray(y_true_idx)]
+        return float(np.mean(np.sum((proba - onehot) ** 2, axis=1)))
+
+    @staticmethod
+    def reliability_table(y_true_binary, proba, n_bins: int = 10):
+        """Tabla de calibración: agrupa por bins de probabilidad predicha
+        y compara contra la frecuencia real observada. Un modelo calibrado
+        tiene p_pred_mean ≈ p_obs en cada bin."""
+        y = np.asarray(y_true_binary, dtype=float)
+        p = np.asarray(proba, dtype=float)
+        bins = np.linspace(0, 1, n_bins + 1)
+        idx = np.clip(np.digitize(p, bins) - 1, 0, n_bins - 1)
+        rows = []
+        for b in range(n_bins):
+            mask = idx == b
+            if mask.sum() == 0:
+                continue
+            rows.append({"bin": b, "p_pred_mean": float(p[mask].mean()),
+                         "p_obs": float(y[mask].mean()), "n": int(mask.sum())})
+        return pd.DataFrame(rows)
 
 
 if __name__ == "__main__":

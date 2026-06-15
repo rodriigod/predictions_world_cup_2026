@@ -28,12 +28,14 @@ LAMBDA_FLOOR, LAMBDA_CEIL = 0.15, 4.5  # límites sanos para selecciones
 
 
 class PoissonGoalsModel:
-    def __init__(self, backend: str = "poisson", random_state: int = 42):
+    def __init__(self, backend: str = "poisson", random_state: int = 42,
+                 alpha: float = 1e-3):
         self.backend = backend
+        self.alpha = alpha
         if backend == "poisson":
             self.model = Pipeline([
                 ("scaler", StandardScaler()),
-                ("glm", PoissonRegressor(alpha=1e-3, max_iter=1000)),
+                ("glm", PoissonRegressor(alpha=alpha, max_iter=1000)),
             ])
         elif backend == "gbm":
             self.model = HistGradientBoostingRegressor(
