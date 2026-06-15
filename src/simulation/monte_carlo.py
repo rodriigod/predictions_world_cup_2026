@@ -37,6 +37,14 @@ MUST_WIN_ATTACK = 1.06     # obligado a ganar: más vértigo ofensivo
 MUST_WIN_CONCEDE = 1.04    # ...y más espacios atrás
 CAGEY_DRAW = 0.92          # empate sirve a ambos: partido cerrado
 
+# Resolución de eliminatorias tras empate en 90' (prórroga + penales).
+# La evidencia (tandas de penales ≈ moneda al aire) recomienda NO decidir
+# por la fuerza completa de 90', sino dar a la prórroga otra oportunidad y
+# luego un sesgo leve al favorito en los penales.
+KO_ET_FRACTION = 0.33      # 30' de prórroga ≈ 1/3 del tiempo de 90'
+KO_PEN_BIAS = 0.05         # sesgo máximo del favorito en penales (~±5%)
+KO_PEN_ELO_SCALE = 200.0   # cuán rápido el ELO inclina la tanda
+
 
 def _dixon_coles_matrix(lam_a: float, lam_b: float,
                         rho: float = DC_RHO) -> np.ndarray:
@@ -246,21 +254,26 @@ class GroupStageSimulator:
 
     def _play_ko_match(self, ia: int, ib: int, pair_lams: np.ndarray
                        ) -> tuple[int, int]:
-        """(ganador, perdedor) de un cruce eliminatorio; empate en 90'
-        se resuelve por la fuerza relativa (prórroga/penales)."""
+        """(ganador, perdedor) de un cruce eliminatorio. Empate en 90' ->
+        prórroga (lambda reducida); si sigue empatado -> penales, que son
+        casi una moneda al aire con un sesgo leve al de más ELO."""
         jit = np.exp(self.rng.normal(0.0, self.lambda_jitter, 2))
-        m = _dixon_coles_matrix(pair_lams[ia, ib] * jit[0],
-                                pair_lams[ib, ia] * jit[1], self.rho)
-        ga_, gb_ = _sample_score(m, self.rng)
-        if ga_ > gb_:
-            return ia, ib
-        if gb_ > ga_:
-            return ib, ia
-        p_a = np.tril(m, -1).sum()
-        p_b = np.triu(m, 1).sum()
-        if self.rng.random() < p_a / (p_a + p_b):
-            return ia, ib
-        return ib, ia
+        la = pair_lams[ia, ib] * jit[0]
+        lb = pair_lams[ib, ia] * jit[1]
+        ga_, gb_ = _sample_score(_dixon_coles_matrix(la, lb, self.rho),
+                                 self.rng)
+        if ga_ != gb_:
+            return (ia, ib) if ga_ > gb_ else (ib, ia)
+        # prórroga: 30' ≈ un tercio de los goles esperados
+        ea, eb = _sample_score(
+            _dixon_coles_matrix(la * KO_ET_FRACTION, lb * KO_ET_FRACTION,
+                                self.rho), self.rng)
+        if ea != eb:
+            return (ia, ib) if ea > eb else (ib, ia)
+        # penales: ~50%, leve ventaja al favorito por ELO
+        elo_diff = self.teams["elo"].iat[ia] - self.teams["elo"].iat[ib]
+        p_pen_a = 0.5 + KO_PEN_BIAS * np.tanh(elo_diff / KO_PEN_ELO_SCALE)
+        return (ia, ib) if self.rng.random() < p_pen_a else (ib, ia)
 
     # ---------- torneo completo ----------
     def run(self, n_sims: int = 10000, knockout: bool = False

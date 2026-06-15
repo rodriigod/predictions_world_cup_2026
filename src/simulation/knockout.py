@@ -155,10 +155,12 @@ def _predict_ko_match(sim, team_a: str, team_b: str) -> tuple[str, str, float, f
     p_a = float(np.tril(m, -1).sum())
     p_x = float(np.trace(m))
     p_b = float(np.triu(m, 1).sum())
-    if p_x >= max(p_a, p_b):           # empate como desenlace modal
+    if p_x >= max(p_a, p_b):           # empate como desenlace modal en 90'
         diag = np.diag(m)
         k = int(diag.argmax())
-        winner = team_a if p_a >= p_b else team_b
+        # prórroga de bajo marcador -> casi siempre sigue 0-0/1-1 -> penales,
+        # que favorecen apenas al de más ELO (≈ moneda al aire)
+        winner = team_a if float(a["elo"]) >= float(b["elo"]) else team_b
         return winner, f"{k}-{k} (pen)", p_a, p_x, p_b
     if p_a >= p_b:                      # gana A en 90'
         mask = np.tril(m, -1)

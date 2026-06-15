@@ -129,7 +129,10 @@ def load_results() -> pd.DataFrame:
     return df
 
 
-def build_historical_dataset(cutoff: str | None = None) -> dict:
+def build_historical_dataset(cutoff: str | None = None, *,
+                             home_adv_elo: float = 100.0,
+                             k_mult: float = 1.0,
+                             half_life: float = DECAY_HALF_LIFE_YEARS) -> dict:
     """Recorre la historia una sola vez y devuelve:
 
     - X, y, w           : filas equipo-partido para el modelo de Poisson
@@ -140,13 +143,18 @@ def build_historical_dataset(cutoff: str | None = None) -> dict:
     `cutoff`: si se entrega (ej. "2026-06-11"), los partidos desde esa
     fecha se IGNORAN por completo (ni entrenan, ni actualizan el ELO,
     ni quedan fijos) — simula la foto pre-torneo.
+
+    `home_adv_elo`, `k_mult`, `half_life`: hiperparámetros del ELO/decaimiento
+    (defaults = los de producción), expuestos para tuneo leak-free.
     """
     df = load_results()
     if cutoff is not None:
         df = df[df["date"] < pd.Timestamp(cutoff)].reset_index(drop=True)
     hist: dict[str, _TeamHistory] = {}
-    rows, goals, weights = [], [], []
-    m_rows, m_labels, m_weights = [], [], []
+    rows, goals, weights, row_dates = [], [], [], []
+    m_rows, m_rows_b, m_labels, m_weights, m_dates, m_is_wc = \
+        [], [], [], [], [], []
+    m_home, m_away = [], []
     played_wc = []
 
     train_from = pd.Timestamp(TRAIN_FROM)
@@ -186,18 +194,23 @@ def build_historical_dataset(cutoff: str | None = None) -> dict:
             sb = _neutral_series(r.away_team, hb, is_host=0.0)
             fa = build_match_features(sa, sb, matchday, rest_a - rest_b)
             fb = build_match_features(sb, sa, matchday, rest_b - rest_a)
-            w = (np.exp(-(t_max - r.date).days / 365.25
-                        / DECAY_HALF_LIFE_YEARS)
+            w = (np.exp(-(t_max - r.date).days / 365.25 / half_life)
                  * _tournament_weight(r.tournament))
             rows.extend([fa, fb]); goals.extend([gh, ga_])
             weights.extend([w, w])
+            row_dates.extend([r.date, r.date])
             m_rows.append(fa)
+            m_rows_b.append(fb)
             m_labels.append("1" if gh > ga_ else ("2" if gh < ga_ else "X"))
             m_weights.append(w)
+            m_dates.append(r.date)
+            m_is_wc.append(is_wc)
+            m_home.append(r.home_team)
+            m_away.append(r.away_team)
 
         # ---- actualizar ELO y rodantes ----
-        k = _k_factor(r.tournament) * _goal_mult(abs(gh - ga_))
-        home_adv = 0.0 if r.neutral else 100.0
+        k = k_mult * _k_factor(r.tournament) * _goal_mult(abs(gh - ga_))
+        home_adv = 0.0 if r.neutral else home_adv_elo
         we_a = 1.0 / (1.0 + 10 ** (-(ha.elo + home_adv - hb.elo) / 400.0))
         score_a = 1.0 if gh > ga_ else (0.5 if gh == ga_ else 0.0)
         delta = k * (score_a - we_a)
@@ -217,12 +230,85 @@ def build_historical_dataset(cutoff: str | None = None) -> dict:
         "X": pd.DataFrame(rows, columns=FEATURE_NAMES),
         "y": pd.Series(goals, name="goals_scored"),
         "w": np.array(weights),
+        "row_dates": pd.Series(row_dates, name="date"),
         "X_match": pd.DataFrame(m_rows, columns=FEATURE_NAMES),
+        "X_match_away": pd.DataFrame(m_rows_b, columns=FEATURE_NAMES),
         "y_result": pd.Series(m_labels, name="result_1x2"),
         "w_match": np.array(m_weights),
+        "match_dates": pd.Series(m_dates, name="date"),
+        "match_is_wc": np.array(m_is_wc),
+        "match_home": pd.Series(m_home, name="home"),
+        "match_away": pd.Series(m_away, name="away"),
         "snapshots": hist,
         "played_wc": played_wc,
     }
+
+
+# ---------------------------------------------------------------------
+# Backtesting multi-Mundial (validación con torneos pasados)
+# ---------------------------------------------------------------------
+
+# Mundiales con formato comparable (32 equipos) disponibles en el dataset,
+# y el día ANTES de su primer partido (cutoff pre-torneo).
+WC_BACKTEST_YEARS = [1998, 2002, 2006, 2010, 2014, 2018, 2022]
+WC_START = {
+    1998: "1998-06-09", 2002: "2002-05-30", 2006: "2006-06-08",
+    2010: "2010-06-10", 2014: "2014-06-11", 2018: "2018-06-13",
+    2022: "2022-11-19",
+}
+
+
+def matches_of_wc(df: pd.DataFrame, year: int) -> pd.DataFrame:
+    """Partidos jugados (con resultado) del Mundial `year`, por fecha."""
+    return df[(df["tournament"] == "FIFA World Cup")
+              & (df["date"].dt.year == year)
+              & df["home_score"].notna()].sort_values("date")
+
+
+def wc_backtest_rows(year: int, snapshots: dict) -> list[dict]:
+    """Filas de features para los partidos del Mundial `year`, usando el
+    estado (ELO/forma) CONGELADO justo antes del torneo — exactamente el
+    mismo protocolo pre-torneo con el que se predice 2026, sin leakage.
+
+    `snapshots` debe venir de build_historical_dataset(cutoff=WC_START[year]).
+    Replica la MISMA fórmula de matchday del entrenamiento (los partidos de
+    eliminación quedan como matchday=3, igual que en el fit) para no crear
+    desajuste train/test; el campo `stage` separa grupo/eliminación aparte.
+    """
+    df = load_results()
+    test = matches_of_wc(df, year)
+    rows: list[dict] = []
+    seen: dict[str, int] = {}   # equipo -> partidos jugados en este Mundial
+    for r in test.itertuples():
+        a, b = r.home_team, r.away_team
+        if a not in snapshots or b not in snapshots:
+            continue
+        ha, hb = snapshots[a], snapshots[b]
+        cnt_a, cnt_b = seen.get(a, 0), seen.get(b, 0)
+        md_a = min(cnt_a + 1, 3)
+        md_b = min(cnt_b + 1, 3)
+        matchday = min(md_a, md_b) if max(md_a, md_b) <= 3 else 0
+        stage = "knockout" if (cnt_a >= 3 or cnt_b >= 3) else "group"
+        host_a = 0.0 if r.neutral else 1.0
+        rest_a = (min((r.date - ha.last_date).days, 60)
+                  if ha.last_date is not None else 30)
+        rest_b = (min((r.date - hb.last_date).days, 60)
+                  if hb.last_date is not None else 30)
+        sa = _neutral_series(a, ha, is_host=host_a)
+        sb = _neutral_series(b, hb, is_host=0.0)
+        gh, ga_ = int(r.home_score), int(r.away_score)
+        rows.append({
+            "year": year, "date": r.date, "home": a, "away": b,
+            "stage": stage, "city": getattr(r, "city", ""),
+            "country": getattr(r, "country", ""),
+            "gh": gh, "ga": ga_,
+            "result": "1" if gh > ga_ else ("2" if gh < ga_ else "X"),
+            "feat_a": build_match_features(sa, sb, matchday, rest_a - rest_b),
+            "feat_b": build_match_features(sb, sa, matchday, rest_b - rest_a),
+        })
+        seen[a] = cnt_a + 1
+        seen[b] = cnt_b + 1
+    return rows
 
 
 def teams_table_from_history(snapshots: dict,
