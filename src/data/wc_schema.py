@@ -28,6 +28,14 @@ FEATURES: list[FeatureSpec] = [
                 "división por 400 (escala logística ELO)"),
     FeatureSpec("elo_win_expectancy", "float", "1_rendimiento",
                 "1 / (1 + 10^(-elo_diff/400))", "ya en [0,1]"),
+    FeatureSpec("pi_attack_own", "float", "1_rendimiento",
+                "pi-rating OFENSIVO propio (Constantinou&Fenton 2013): fuerza "
+                "de ataque latente, actualizada online con el error de goles",
+                "z-score (fit en train)"),
+    FeatureSpec("pi_defense_opp", "float", "1_rendimiento",
+                "pi-rating DEFENSIVO del RIVAL (+ = concede menos): debilidad/"
+                "solidez defensiva que enfrenta el ataque propio",
+                "z-score (fit en train)"),
     FeatureSpec("xg_for_own", "float", "1_rendimiento",
                 "xG a favor por partido, últimos 10 oficiales (propio)",
                 "z-score (fit en train)"),
@@ -85,6 +93,9 @@ def build_match_features(own: pd.Series, opp: pd.Series,
     return {
         "elo_diff_scaled": elo_diff / 400.0,
         "elo_win_expectancy": 1.0 / (1.0 + 10 ** (-elo_diff / 400.0)),
+        # pi-ratings: si la fila no los trae (modo sintético) caen a neutro 0
+        "pi_attack_own": float(own.get("pi_attack", 0.0)),
+        "pi_defense_opp": float(opp.get("pi_defense", 0.0)),
         "xg_for_own": own["xg_for_last10"],
         "xg_against_opp": opp["xg_against_last10"],
         "form_diff": own["form_last5_points_pct"] - opp["form_last5_points_pct"],

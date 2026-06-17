@@ -4,7 +4,7 @@ de grupos del Mundial 2026 (fixture de la polla mundialera) con Monte
 Carlo. Los partidos ya jugados del Mundial quedan fijos.
 
 Uso:
-    python scripts/run_groups_simulation.py [--sims 10000]
+    python scripts/run_groups_simulation.py [--sims 50000]
         [--backend poisson|gbm|xgb] [--train historical|synthetic]
         [--no-classifier]
 
@@ -28,7 +28,7 @@ from src.simulation import (GroupStageSimulator, console_summary,
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sims", type=int, default=10000)
+    ap.add_argument("--sims", type=int, default=50000)
     ap.add_argument("--backend", default="poisson",
                     choices=["poisson", "gbm", "xgb"])
     ap.add_argument("--train", default="historical",
@@ -39,6 +39,12 @@ def main() -> None:
                          "Usar --cutoff none para incluir lo ya jugado.")
     ap.add_argument("--no-classifier", action="store_true",
                     help="omite la comparación con el clasificador 1X2")
+    ap.add_argument("--half-life", type=float, default=3.0,
+                    help="vida media (años) del decaimiento temporal "
+                         "Dixon-Coles (default 3.0)")
+    ap.add_argument("--noise-sigma", type=float, default=0.10,
+                    help="sigma del ruido lognormal por partido en el Monte "
+                         "Carlo (componente de 'suerte'; default 0.10)")
     ap.add_argument("--teams",
                     default=str(ROOT / "files/f0_raw/teams_2026.csv"))
     ap.add_argument("--fixtures",
@@ -70,7 +76,9 @@ def main() -> None:
               "(ELO + forma + decaimiento temporal)...")
         if cutoff:
             print(f"      Modo PRE-TORNEO: se ignora todo desde {cutoff}")
-        data = build_historical_dataset(cutoff=cutoff)
+        print(f"      Vida media del decaimiento: {args.half_life} años")
+        data = build_historical_dataset(cutoff=cutoff,
+                                        half_life=args.half_life)
         X, y, w = data["X"], data["y"], data["w"]
         teams = teams_table_from_history(data["snapshots"], teams_csv)
         played = played_results_es(data["played_wc"])
@@ -95,17 +103,41 @@ def main() -> None:
         print(f"      {k}: {v}")
     model.save(str(ROOT / "models" / f"poisson_goals_{args.backend}.pkl"))
 
-    # ---- 3. Clasificador 1X2 (verificación cruzada estilo ML moderno) ----
+    # ---- 3. Clasificador 1X2 + stacking (verificación estilo ML moderno) ----
     if not args.no_classifier and args.train == "historical":
         from src.models.result_classifier import ResultClassifier
+        from src.models.stacked_classifier import StackedResultClassifier
+        from src.data.wc_schema import build_match_features, match_features_frame
         print("[3/5] Entrenando clasificador 1X2 "
-              "(XGBoost vs RF vs logística baseline)...")
+              "(XGBoost vs RF vs logística baseline) + STACKING...")
         clf = ResultClassifier(random_state=args.seed)
         clf_metrics = clf.fit(data["X_match"], data["y_result"],
                               sample_weight=data["w_match"])
         print(clf_metrics.to_string(index=False))
         print(f"      mejor modelo 1X2: {clf.best_name}")
         clf_metrics.to_csv(out_dir / "classifier_comparison.csv", index=False)
+
+        # Stacking out-of-fold (logística+RF+XGBoost -> meta-logística).
+        # NOTA HONESTA: el backtest multi-Mundial muestra que el stacking
+        # rinde PEOR que Poisson+Dixon-Coles en TODAS las métricas (los
+        # modelos base comparten señal lineal en ELO -> muy correlacionados).
+        # Se ejecuta y reporta por pedido explícito, pero NO mueve la
+        # predicción de marcadores: esa la sigue dando el modelo de goles.
+        print("      Entrenando STACKING (se reporta como verificación; "
+              "el backtest lo marca peor que Poisson+DC)...")
+        stack = StackedResultClassifier(random_state=args.seed).fit(
+            data["X_match"], data["y_result"], data["w_match"])
+        feat_rows = []
+        for fx in fixtures.itertuples():
+            ta = teams.loc[teams["team"] == fx.team_a].iloc[0]
+            tb = teams.loc[teams["team"] == fx.team_b].iloc[0]
+            feat_rows.append(build_match_features(ta, tb, int(fx.matchday)))
+        stack_p = stack.predict_proba_1x2(match_features_frame(feat_rows))
+        stack_out = fixtures[["group", "matchday", "team_a", "team_b"]].copy()
+        stack_out[["p_win_a_stack", "p_draw_stack", "p_win_b_stack"]] = \
+            stack_p.round(4).to_numpy()
+        stack_out.to_csv(out_dir / "stacking_1x2_predictions.csv", index=False)
+        print(f"      stacking 1X2 -> {out_dir}/stacking_1x2_predictions.csv")
     else:
         print("[3/5] (clasificador 1X2 omitido)")
 
@@ -113,6 +145,7 @@ def main() -> None:
     print(f"[4/5] Simulando el torneo COMPLETO {args.sims:,} veces "
           "(grupos + 16avos -> final)...")
     sim = GroupStageSimulator(teams, fixtures, model,
+                              lambda_jitter=args.noise_sigma,
                               played_results=played, seed=args.seed)
     standings, match_results = sim.run(n_sims=args.sims, knockout=True)
 

@@ -98,6 +98,34 @@ class ModelMetrics:
         return float(np.mean(np.sum((proba - onehot) ** 2, axis=1)))
 
     @staticmethod
+    def plot_reliability_curve(y_true_idx, proba, path,
+                               model_name: str = "modelo", n_bins: int = 10):
+        """Guarda un reliability plot (calibración) por clase 1/X/2 en `path`.
+        Un modelo calibrado cae sobre la diagonal. Devuelve la ruta escrita."""
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        proba = np.asarray(proba, dtype=float)
+        y = np.asarray(y_true_idx)
+        names = ["1 (gana local)", "X (empate)", "2 (gana visita)"]
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        for c, (ax, name) in enumerate(zip(axes, names)):
+            tab = ModelMetrics.reliability_table(
+                (y == c).astype(float), proba[:, c], n_bins=n_bins)
+            ax.plot(tab["p_pred_mean"], tab["p_obs"], "o-", label=model_name)
+            ax.plot([0, 1], [0, 1], "k--", alpha=0.5, label="perfecto")
+            ax.set_xlabel("probabilidad predicha")
+            ax.set_ylabel("frecuencia real")
+            ax.set_title(f"Calibración: {name}")
+            ax.legend(); ax.grid(True, alpha=0.3)
+        fig.suptitle(f"Reliability curves — {model_name}")
+        fig.tight_layout()
+        fig.savefig(path, dpi=150)
+        plt.close(fig)
+        return path
+
+    @staticmethod
     def reliability_table(y_true_binary, proba, n_bins: int = 10):
         """Tabla de calibración: agrupa por bins de probabilidad predicha
         y compara contra la frecuencia real observada. Un modelo calibrado

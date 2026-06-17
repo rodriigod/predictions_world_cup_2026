@@ -162,6 +162,15 @@ def main() -> None:
 
     print(f"\nCSV: {out_path}")
 
+    # ---- plot de calibración opcional (--plots) ----
+    if "--plots" in sys.argv:
+        idx = prim["result"].map(IDX).to_numpy()
+        png = ROOT / "results/reports/calibration_poisson_dc.png"
+        ModelMetrics.plot_reliability_curve(
+            idx, prim[["p1", "pX", "p2"]].to_numpy(), str(png),
+            model_name="Poisson+Dixon-Coles")
+        print(f"Reliability plot: {png}")
+
 
 if __name__ == "__main__":
     main()

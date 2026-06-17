@@ -30,6 +30,13 @@ MAX_GOALS = 9          # truncamiento de la matriz de marcadores
 DC_RHO = -0.08         # corrección Dixon-Coles para 0-0/1-1 (nota #4)
 LAMBDA_JITTER = 0.10   # sigma del ruido lognormal por partido/iteración
 
+# Temperatura de calibración aplicada a las lambdas ANTES de alimentar el
+# Monte Carlo: lam' = mean * (lam/mean)^T. T<1 comprime hacia la media
+# (menos sobreconfianza), T>1 la acentúa. El backtest multi-Mundial mostró
+# que el modelo ya está bien calibrado (temperature scaling óptimo en T=1.0),
+# así que el default es 1.0 = identidad; queda expuesto para re-calibrar.
+LAMBDA_TEMPERATURE = 1.0
+
 # Multiplicadores de incentivo (Categoría 4 del diccionario)
 ROTATION_ATTACK = 0.88     # clasificado con 6 pts rota: ataca menos
 ROTATION_CONCEDE = 1.08    # ...y concede más
@@ -64,6 +71,18 @@ def _dixon_coles_matrix(lam_a: float, lam_b: float,
 def _sample_score(matrix: np.ndarray, rng: np.random.Generator) -> tuple[int, int]:
     flat = rng.choice(matrix.size, p=matrix.ravel())
     return divmod(flat, matrix.shape[1])
+
+
+def dc_1x2(lam_a: float, lam_b: float, rho: float = DC_RHO
+           ) -> tuple[float, float, float]:
+    """Probabilidades 1X2 ANALÍTICAS derivadas directamente de la matriz
+    Dixon-Coles (no muestreadas): P(1) = suma del triángulo inferior,
+    P(X) = traza (todos los empates 0-0,1-1,...), P(2) = triángulo superior.
+    Es la forma correcta de obtener P(empate) — sumando la diagonal de la
+    matriz de marcadores — en vez de cualquier heurística."""
+    m = _dixon_coles_matrix(lam_a, lam_b, rho)
+    return (float(np.tril(m, -1).sum()), float(np.trace(m)),
+            float(np.triu(m, 1).sum()))
 
 
 def _modal_score_given_result(tally: "_MatchTally",
@@ -116,6 +135,7 @@ class _MatchTally:
 class GroupStageSimulator:
     def __init__(self, teams: pd.DataFrame, fixtures: pd.DataFrame, model,
                  rho: float = DC_RHO, lambda_jitter: float = LAMBDA_JITTER,
+                 calibration_temp: float = LAMBDA_TEMPERATURE,
                  played_results: pd.DataFrame | None = None,
                  seed: int = 42):
         """teams: TEAM_COLUMNS, una fila por equipo.
@@ -126,6 +146,7 @@ class GroupStageSimulator:
         self.model = model
         self.rho = rho
         self.lambda_jitter = lambda_jitter
+        self.calibration_temp = calibration_temp
         self.rng = np.random.default_rng(seed)
         self._idx = {t: i for i, t in enumerate(self.teams["team"])}
 
@@ -185,8 +206,18 @@ class GroupStageSimulator:
             rd = float(rest_by_pos.loc[i])
             rows.append(build_match_features(a, b, fx.matchday, rd))
             rows.append(build_match_features(b, a, fx.matchday, -rd))
-        lams = self.model.predict_lambda(match_features_frame(rows))
+        lams = self._calibrate(self.model.predict_lambda(
+            match_features_frame(rows)))
         return lams.reshape(-1, 2)  # [n_fixtures, (lado_a, lado_b)]
+
+    def _calibrate(self, lams: np.ndarray) -> np.ndarray:
+        """Temperatura de calibración sobre las lambdas (T=1.0 = identidad).
+        lam' = mean * (lam/mean)^T — comprime/acentúa la dispersión sin mover
+        la media global de goles."""
+        if self.calibration_temp == 1.0:
+            return lams
+        mean = float(np.mean(lams))
+        return mean * (lams / mean) ** self.calibration_temp
 
     # ---------- incentivos fecha 3 ----------
     @staticmethod
@@ -246,7 +277,8 @@ class GroupStageSimulator:
                 rows.append(build_match_features(
                     self.teams.loc[i], self.teams.loc[j], 0))
                 idx.append((i, j))
-        lams = self.model.predict_lambda(match_features_frame(rows))
+        lams = self._calibrate(self.model.predict_lambda(
+            match_features_frame(rows)))
         out = np.full((n, n), np.nan)
         for (i, j), l in zip(idx, lams):
             out[i, j] = l
@@ -276,7 +308,7 @@ class GroupStageSimulator:
         return (ia, ib) if self.rng.random() < p_pen_a else (ib, ia)
 
     # ---------- torneo completo ----------
-    def run(self, n_sims: int = 10000, knockout: bool = False
+    def run(self, n_sims: int = 50000, knockout: bool = False
             ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Devuelve (tabla de clasificación, tabla de partidos).
 
@@ -406,6 +438,13 @@ class GroupStageSimulator:
         matches["p_win_a"] = [t.win_a / n_sims for t in tallies]
         matches["p_draw"] = [t.draw / n_sims for t in tallies]
         matches["p_win_b"] = [t.win_b / n_sims for t in tallies]
+        # Probabilidades 1X2 ANALÍTICAS de la matriz Dixon-Coles base (sin
+        # jitter ni incentivos): P(empate) sale de la diagonal, no de heurística.
+        dc = [dc_1x2(self._lambdas[i, 0], self._lambdas[i, 1], self.rho)
+              for i in range(len(self.fixtures))]
+        matches["p_win_a_dc"] = [round(p[0], 4) for p in dc]
+        matches["p_draw_dc"] = [round(p[1], 4) for p in dc]
+        matches["p_win_b_dc"] = [round(p[2], 4) for p in dc]
         matches["exp_goals_a"] = [t.goals_a / n_sims for t in tallies]
         matches["exp_goals_b"] = [t.goals_b / n_sims for t in tallies]
         most_likely = [t.scores.most_common(1)[0] for t in tallies]

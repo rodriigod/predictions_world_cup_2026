@@ -36,7 +36,21 @@ RESULTS_CSV = Path(__file__).resolve().parents[2] / "files/f0_raw/international_
 
 TRAIN_FROM = "1995-01-01"   # las filas de entrenamiento parten aquí
 WARMUP_FROM = "1980-01-01"  # el ELO/forma se calculan desde aquí
-DECAY_HALF_LIFE_YEARS = 8.0  # peso 0.5 a los ~5.5 años (exp decay /8)
+DECAY_HALF_LIFE_YEARS = 3.0  # peso 0.5 a los ~2 años (exp decay /3): prioriza
+#                              forma reciente sobre historial largo. El barrido
+#                              (experiment_elo.py) mostró que 3-30a es plano en
+#                              el RPS del backtest, pero 3a es la convención para
+#                              selecciones y no degrada, así que se adopta.
+
+# --- pi-ratings ofensivo/defensivo online (Constantinou & Fenton 2013) ---
+# Cada equipo lleva un rating de ATAQUE (att, +=marca más) y DEFENSA (dfn,
+# +=concede menos), actualizados partido a partido con el error de goles
+# esperados. Capturan ataque y defensa por separado, complementando al ELO
+# (que es un escalar de fuerza total).
+PI_MU = 0.30          # log de la media de goles de referencia (~1.35)
+PI_HOME = 0.20        # bonus ofensivo de localía en escala log
+PI_LR = 0.06          # tasa de aprendizaje del update online
+PI_CLIP = 1.2         # cota de los ratings para evitar divergencia
 
 # Nombre en español (polla) -> nombre del dataset
 NAME_MAP = {
@@ -91,11 +105,13 @@ def _goal_mult(diff: int) -> float:
 
 
 class _TeamHistory:
-    __slots__ = ("elo", "gf10", "ga10", "pts5", "last_date", "n_matches",
-                 "wc_matches_in")
+    __slots__ = ("elo", "att", "dfn", "gf10", "ga10", "pts5", "last_date",
+                 "n_matches", "wc_matches_in")
 
     def __init__(self):
         self.elo = 1500.0
+        self.att = 0.0                  # pi-rating ofensivo (log-goles)
+        self.dfn = 0.0                  # pi-rating defensivo (+ = concede menos)
         self.gf10: deque = deque(maxlen=10)
         self.ga10: deque = deque(maxlen=10)
         self.pts5: deque = deque(maxlen=5)
@@ -110,6 +126,8 @@ def _neutral_series(name_es_or_team: str, h: "_TeamHistory",
     sin dato histórico en neutro."""
     return pd.Series({
         "elo": h.elo,
+        "pi_attack": h.att,
+        "pi_defense": h.dfn,
         "xg_for_last10": float(np.mean(h.gf10)) if h.gf10 else 1.25,
         "xg_against_last10": float(np.mean(h.ga10)) if h.ga10 else 1.25,
         "form_last5_points_pct": (float(np.mean(h.pts5)) / 3.0
@@ -215,6 +233,18 @@ def build_historical_dataset(cutoff: str | None = None, *,
         score_a = 1.0 if gh > ga_ else (0.5 if gh == ga_ else 0.0)
         delta = k * (score_a - we_a)
         ha.elo += delta; hb.elo -= delta
+
+        # ---- update online de pi-ratings ataque/defensa ----
+        # goles esperados con los ratings ACTUALES (pre-update); el error
+        # respecto al marcado real ajusta ataque propio y defensa rival.
+        pi_home = 0.0 if r.neutral else PI_HOME
+        pred_a = min(np.exp(PI_MU + ha.att - hb.dfn + pi_home), 6.0)
+        pred_b = min(np.exp(PI_MU + hb.att - ha.dfn), 6.0)
+        err_a, err_b = gh - pred_a, ga_ - pred_b
+        ha.att = float(np.clip(ha.att + PI_LR * err_a, -PI_CLIP, PI_CLIP))
+        hb.dfn = float(np.clip(hb.dfn - PI_LR * err_a, -PI_CLIP, PI_CLIP))
+        hb.att = float(np.clip(hb.att + PI_LR * err_b, -PI_CLIP, PI_CLIP))
+        ha.dfn = float(np.clip(ha.dfn - PI_LR * err_b, -PI_CLIP, PI_CLIP))
         ha.gf10.append(gh); ha.ga10.append(ga_)
         hb.gf10.append(ga_); hb.ga10.append(gh)
         ha.pts5.append(3 if gh > ga_ else (1 if gh == ga_ else 0))
