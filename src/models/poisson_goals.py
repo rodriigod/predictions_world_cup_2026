@@ -29,9 +29,10 @@ LAMBDA_FLOOR, LAMBDA_CEIL = 0.15, 4.5  # límites sanos para selecciones
 
 class PoissonGoalsModel:
     def __init__(self, backend: str = "poisson", random_state: int = 42,
-                 alpha: float = 1e-3):
+                 alpha: float = 1e-3, feature_names: list[str] | None = None):
         self.backend = backend
         self.alpha = alpha
+        self.features = feature_names if feature_names is not None else FEATURE_NAMES
         if backend == "poisson":
             self.model = Pipeline([
                 ("scaler", StandardScaler()),
@@ -58,7 +59,7 @@ class PoissonGoalsModel:
         `sample_weight` implementa el decaimiento temporal de Dixon-Coles
         (1997): partidos recientes/importantes pesan más en el ajuste.
         """
-        X = X[FEATURE_NAMES]
+        X = X[self.features]
         if sample_weight is None:
             sample_weight = np.ones(len(X))
         X_tr, X_te, y_tr, y_te, w_tr, w_te = train_test_split(
@@ -86,7 +87,7 @@ class PoissonGoalsModel:
             self.model.fit(X, y, sample_weight=w)
 
     def predict_lambda(self, X: pd.DataFrame) -> np.ndarray:
-        lam = self.model.predict(X[FEATURE_NAMES])
+        lam = self.model.predict(X[self.features])
         return np.clip(lam, LAMBDA_FLOOR, LAMBDA_CEIL)
 
     def save(self, path: str) -> None:

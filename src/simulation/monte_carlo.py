@@ -73,6 +73,78 @@ def _sample_score(matrix: np.ndarray, rng: np.random.Generator) -> tuple[int, in
     return divmod(flat, matrix.shape[1])
 
 
+# ----------------------------- blend con mercado -----------------------------
+def _demargin(odds_home: float, odds_draw: float,
+              odds_away: float) -> tuple[float, float, float]:
+    """Odds decimales -> probabilidades implícitas SIN margen (overround).
+    prob = (1/odd) normalizado para que sumen 1 (método proporcional)."""
+    imp = np.array([1.0 / odds_home, 1.0 / odds_draw, 1.0 / odds_away])
+    return tuple(imp / imp.sum())
+
+
+def blend_with_market(model_probs: pd.DataFrame, odds_csv, alpha: float = 0.3
+                      ) -> pd.DataFrame:
+    """Mezcla las probabilidades 1X2 del modelo con las del mercado.
+
+    `model_probs`: DataFrame con columnas home_team, away_team, p_home,
+    p_draw, p_away (1X2 del modelo, p.ej. derivadas de la matriz Dixon-Coles).
+    `odds_csv`: ruta o DataFrame con home_team, away_team, odds_home,
+    odds_draw, odds_away (odds decimales del mercado).
+    `alpha`: PESO DEL MODELO. alpha=1.0 -> solo modelo, 0.0 -> solo mercado,
+    0.5 -> mitad y mitad. El blend es un *log-linear opinion pool* (media
+    geométrica ponderada renormalizada), el equivalente multiclase de mezclar
+    en log-odds: p ∝ p_modelo^alpha · p_mercado^(1-alpha).
+
+    Devuelve una copia de `model_probs` con p_home/p_draw/p_away mezcladas y
+    una columna `blended` (True donde había odds del mercado)."""
+    odds = pd.read_csv(odds_csv) if isinstance(odds_csv, (str, bytes)) else odds_csv
+    out = model_probs.copy().reset_index(drop=True)
+    out["blended"] = False
+    if odds is None or len(odds) == 0:
+        return out
+    key = {(r.home_team, r.away_team): r for r in odds.itertuples()}
+    eps = 1e-9
+    for i, m in out.iterrows():
+        row = key.get((m["home_team"], m["away_team"]))
+        if row is None:
+            continue
+        try:
+            mh, md, ma = _demargin(float(row.odds_home), float(row.odds_draw),
+                                   float(row.odds_away))
+        except (ValueError, ZeroDivisionError, TypeError):
+            continue
+        if not np.isfinite([mh, md, ma]).all():
+            continue
+        pm = np.array([m["p_home"], m["p_draw"], m["p_away"]], float)
+        pk = np.array([mh, md, ma], float)
+        blended = (np.maximum(pm, eps) ** alpha) * (np.maximum(pk, eps) ** (1 - alpha))
+        blended /= blended.sum()
+        out.at[i, "p_home"], out.at[i, "p_draw"], out.at[i, "p_away"] = blended
+        out.at[i, "blended"] = True
+    return out
+
+
+def lambdas_from_1x2(p1: float, pX: float, p2: float,
+                     init: tuple[float, float] = (1.3, 1.1),
+                     rho: float = DC_RHO) -> tuple[float, float]:
+    """Resuelve (lam_a, lam_b) cuya matriz Dixon-Coles reproduce el 1X2 dado.
+    El MC necesita λ para samplear marcadores; tras mezclar con el mercado en
+    el espacio de probabilidades, re-derivamos las λ que las generan."""
+    from scipy.optimize import minimize
+    target = np.array([p1, pX, p2])
+
+    def loss(z):
+        la, lb = np.exp(z)            # exp -> λ siempre positivas
+        m = _dixon_coles_matrix(min(la, 6.0), min(lb, 6.0), rho)
+        pred = np.array([np.tril(m, -1).sum(), np.trace(m), np.triu(m, 1).sum()])
+        return float(np.sum((pred - target) ** 2))
+
+    res = minimize(loss, np.log(np.array(init)), method="Nelder-Mead",
+                   options={"xatol": 1e-4, "fatol": 1e-10, "maxiter": 400})
+    la, lb = np.exp(res.x)
+    return float(np.clip(la, 0.15, 4.5)), float(np.clip(lb, 0.15, 4.5))
+
+
 def dc_1x2(lam_a: float, lam_b: float, rho: float = DC_RHO
            ) -> tuple[float, float, float]:
     """Probabilidades 1X2 ANALÍTICAS derivadas directamente de la matriz
@@ -136,6 +208,7 @@ class GroupStageSimulator:
     def __init__(self, teams: pd.DataFrame, fixtures: pd.DataFrame, model,
                  rho: float = DC_RHO, lambda_jitter: float = LAMBDA_JITTER,
                  calibration_temp: float = LAMBDA_TEMPERATURE,
+                 odds_csv=None, blend_alpha: float = 1.0,
                  played_results: pd.DataFrame | None = None,
                  seed: int = 42):
         """teams: TEAM_COLUMNS, una fila por equipo.
@@ -147,6 +220,9 @@ class GroupStageSimulator:
         self.rho = rho
         self.lambda_jitter = lambda_jitter
         self.calibration_temp = calibration_temp
+        self.odds_csv = odds_csv
+        self.blend_alpha = blend_alpha
+        self.n_blended = 0
         self.rng = np.random.default_rng(seed)
         self._idx = {t: i for i, t in enumerate(self.teams["team"])}
 
@@ -161,7 +237,32 @@ class GroupStageSimulator:
             if len(names) != 4:
                 raise ValueError(f"El grupo {g} tiene {len(names)} equipos")
         self._lambdas = self._precompute_lambdas()
+        if self.odds_csv is not None and self.blend_alpha < 1.0:
+            self._apply_market_blend()
         self._fixed = self._match_played(played_results)
+
+    def _apply_market_blend(self) -> None:
+        """Mezcla las λ del modelo con las odds del mercado: λ -> 1X2 (matriz
+        DC) -> blend log-lineal con el mercado (alpha=peso del modelo) -> re-
+        deriva λ' que reproducen el 1X2 mezclado. Solo afecta partidos que
+        están en el CSV de odds; el resto queda con las λ del modelo."""
+        rows = []
+        for i in range(len(self.fixtures)):
+            p1, pX, p2 = dc_1x2(self._lambdas[i, 0], self._lambdas[i, 1], self.rho)
+            fx = self.fixtures.iloc[i]
+            rows.append({"home_team": fx["team_a"], "away_team": fx["team_b"],
+                         "p_home": p1, "p_draw": pX, "p_away": p2})
+        model_probs = pd.DataFrame(rows)
+        blended = blend_with_market(model_probs, self.odds_csv, self.blend_alpha)
+        for i in range(len(self.fixtures)):
+            if not bool(blended.at[i, "blended"]):
+                continue
+            la, lb = lambdas_from_1x2(
+                float(blended.at[i, "p_home"]), float(blended.at[i, "p_draw"]),
+                float(blended.at[i, "p_away"]),
+                init=(self._lambdas[i, 0], self._lambdas[i, 1]), rho=self.rho)
+            self._lambdas[i] = (la, lb)
+            self.n_blended += 1
 
     def _match_played(self, played: pd.DataFrame | None) -> dict:
         """Mapea resultados jugados a índices del fixture (cualquier

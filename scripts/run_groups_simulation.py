@@ -45,6 +45,12 @@ def main() -> None:
     ap.add_argument("--noise-sigma", type=float, default=0.10,
                     help="sigma del ruido lognormal por partido en el Monte "
                          "Carlo (componente de 'suerte'; default 0.10)")
+    ap.add_argument("--alpha", type=float, default=1.0,
+                    help="peso del MODELO al mezclar con odds de mercado: "
+                         "1.0=solo modelo (default), 0.0=solo mercado, "
+                         "0.5=mitad. Requiere --odds con datos.")
+    ap.add_argument("--odds", default=str(ROOT / "files/f0_raw/odds_2026.csv"),
+                    help="CSV de odds 1X2 del mercado (ver fetch_odds_2026.py)")
     ap.add_argument("--teams",
                     default=str(ROOT / "files/f0_raw/teams_2026.csv"))
     ap.add_argument("--fixtures",
@@ -144,9 +150,19 @@ def main() -> None:
     # ---- 4. Monte Carlo (grupos + eliminación directa) ----
     print(f"[4/5] Simulando el torneo COMPLETO {args.sims:,} veces "
           "(grupos + 16avos -> final)...")
+    odds_path = Path(args.odds)
+    use_odds = args.alpha < 1.0 and odds_path.exists()
+    if args.alpha < 1.0 and not odds_path.exists():
+        print(f"      ⚠️  --alpha {args.alpha} pero no existe {odds_path}; "
+              "se usa solo el modelo. Corre scripts/fetch_odds_2026.py primero.")
     sim = GroupStageSimulator(teams, fixtures, model,
                               lambda_jitter=args.noise_sigma,
+                              odds_csv=str(odds_path) if use_odds else None,
+                              blend_alpha=args.alpha,
                               played_results=played, seed=args.seed)
+    if use_odds:
+        print(f"      Blend con mercado (alpha={args.alpha}): "
+              f"{sim.n_blended} partidos mezclados con odds")
     standings, match_results = sim.run(n_sims=args.sims, knockout=True)
 
     # ---- 5. Salidas ----

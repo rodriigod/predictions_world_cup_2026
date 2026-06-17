@@ -24,13 +24,13 @@ Marcador pronosticado por el modelo para cada casilla (el más probable condicio
 - SÁB 13/06 15:00 · Catar **[0] - [2]** Suiza
 - JUE 18/06 15:00 · Suiza **[2] - [0]** Bosnia y Her.
 - JUE 18/06 18:00 · Canadá **[2] - [0]** Catar
-- MIÉ 24/06 15:00 · Suiza **[1] - [1]** Canadá
+- MIÉ 24/06 15:00 · Suiza **[0] - [1]** Canadá
 - MIÉ 24/06 15:00 · Bosnia y Her. **[2] - [1]** Catar
 
 | Pos | Equipo | PJ | Pts | GF | GC | DG |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
-| 1 | Canadá | 3 | **7** | 5 | 1 | +4 |
-| 2 | Suiza | 3 | **7** | 5 | 1 | +4 |
+| 1 | Canadá | 3 | **9** | 5 | 0 | +5 |
+| 2 | Suiza | 3 | **6** | 4 | 1 | +3 |
 | 3 | Bosnia y Her. | 3 | **3** | 2 | 5 | -3 |
 | 4 | Catar | 3 | **0** | 1 | 6 | -5 |
 
@@ -52,19 +52,19 @@ Marcador pronosticado por el modelo para cada casilla (el más probable condicio
 
 ## Grupo D
 
-- VIE 12/06 21:00 · EEUU **[1] - [0]** Paraguay
+- VIE 12/06 21:00 · EEUU **[1] - [1]** Paraguay
 - DOM 14/06 00:00 · Australia **[1] - [1]** Turquía
 - VIE 19/06 15:00 · EEUU **[1] - [1]** Australia
 - VIE 19/06 23:00 · Turquía **[1] - [0]** Paraguay
 - JUE 25/06 22:00 · Turquía **[1] - [1]** EEUU
-- JUE 25/06 22:00 · Paraguay **[0] - [1]** Australia
+- JUE 25/06 22:00 · Paraguay **[1] - [1]** Australia
 
 | Pos | Equipo | PJ | Pts | GF | GC | DG |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
-| 1 | EEUU | 3 | **5** | 3 | 2 | +1 |
-| 2 | Australia | 3 | **5** | 3 | 2 | +1 |
-| 3 | Turquía | 3 | **5** | 3 | 2 | +1 |
-| 4 | Paraguay | 3 | **0** | 0 | 3 | -3 |
+| 1 | Turquía | 3 | **5** | 3 | 2 | +1 |
+| 2 | EEUU | 3 | **3** | 3 | 3 | 0 |
+| 3 | Australia | 3 | **3** | 3 | 3 | 0 |
+| 4 | Paraguay | 3 | **2** | 2 | 3 | -1 |
 
 ## Grupo E
 
@@ -84,7 +84,7 @@ Marcador pronosticado por el modelo para cada casilla (el más probable condicio
 
 ## Grupo F
 
-- DOM 14/06 16:00 · Países Bajos **[1] - [0]** Japón
+- DOM 14/06 16:00 · Países Bajos **[1] - [1]** Japón
 - DOM 14/06 22:00 · Suecia **[1] - [1]** Túnez
 - SÁB 20/06 13:00 · Países Bajos **[2] - [0]** Suecia
 - DOM 21/06 00:00 · Túnez **[0] - [1]** Japón
@@ -93,8 +93,8 @@ Marcador pronosticado por el modelo para cada casilla (el más probable condicio
 
 | Pos | Equipo | PJ | Pts | GF | GC | DG |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
-| 1 | Países Bajos | 3 | **9** | 5 | 0 | +5 |
-| 2 | Japón | 3 | **6** | 3 | 1 | +2 |
+| 1 | Países Bajos | 3 | **7** | 5 | 1 | +4 |
+| 2 | Japón | 3 | **7** | 4 | 1 | +3 |
 | 3 | Túnez | 3 | **1** | 1 | 4 | -3 |
 | 4 | Suecia | 3 | **1** | 1 | 5 | -4 |
 
@@ -105,14 +105,14 @@ Marcador pronosticado por el modelo para cada casilla (el más probable condicio
 - DOM 21/06 15:00 · Bélgica **[2] - [1]** Irán
 - DOM 21/06 21:00 · Nueva Zelanda **[0] - [1]** Egipto
 - VIE 26/06 23:00 · Egipto **[0] - [1]** Irán
-- VIE 26/06 23:00 · Nueva Zelanda **[1] - [2]** Bélgica
+- VIE 26/06 23:00 · Nueva Zelanda **[0] - [2]** Bélgica
 
 | Pos | Equipo | PJ | Pts | GF | GC | DG |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
-| 1 | Bélgica | 3 | **9** | 5 | 2 | +3 |
+| 1 | Bélgica | 3 | **9** | 5 | 1 | +4 |
 | 2 | Irán | 3 | **6** | 3 | 2 | +1 |
 | 3 | Egipto | 3 | **3** | 1 | 2 | -1 |
-| 4 | Nueva Zelanda | 3 | **0** | 1 | 4 | -3 |
+| 4 | Nueva Zelanda | 3 | **0** | 0 | 4 | -4 |
 
 ## Grupo H
 
@@ -152,14 +152,14 @@ Marcador pronosticado por el modelo para cada casilla (el más probable condicio
 - MIÉ 17/06 00:00 · Austria **[1] - [0]** Jordania
 - LUN 22/06 13:00 · Argentina **[2] - [0]** Austria
 - LUN 22/06 23:00 · Jordania **[1] - [2]** Argelia
-- SÁB 27/06 22:00 · Argelia **[1] - [0]** Austria
+- SÁB 27/06 22:00 · Argelia **[2] - [1]** Austria
 - SÁB 27/06 22:00 · Jordania **[0] - [2]** Argentina
 
 | Pos | Equipo | PJ | Pts | GF | GC | DG |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
 | 1 | Argentina | 3 | **9** | 5 | 0 | +5 |
-| 2 | Argelia | 3 | **6** | 3 | 2 | +1 |
-| 3 | Austria | 3 | **3** | 1 | 3 | -2 |
+| 2 | Argelia | 3 | **6** | 4 | 3 | +1 |
+| 3 | Austria | 3 | **3** | 2 | 4 | -2 |
 | 4 | Jordania | 3 | **0** | 1 | 5 | -4 |
 
 ## Grupo K

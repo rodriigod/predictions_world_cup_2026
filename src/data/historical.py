@@ -105,8 +105,8 @@ def _goal_mult(diff: int) -> float:
 
 
 class _TeamHistory:
-    __slots__ = ("elo", "att", "dfn", "gf10", "ga10", "pts5", "last_date",
-                 "n_matches", "wc_matches_in")
+    __slots__ = ("elo", "att", "dfn", "gf10", "ga10", "pts5", "pts10",
+                 "ptsC5", "last_date", "n_matches", "wc_matches_in")
 
     def __init__(self):
         self.elo = 1500.0
@@ -115,6 +115,8 @@ class _TeamHistory:
         self.gf10: deque = deque(maxlen=10)
         self.ga10: deque = deque(maxlen=10)
         self.pts5: deque = deque(maxlen=5)
+        self.pts10: deque = deque(maxlen=10)    # forma/consistencia (cand.)
+        self.ptsC5: deque = deque(maxlen=5)     # forma en NO amistosos (cand.)
         self.last_date: pd.Timestamp | None = None
         self.n_matches = 0
         self.wc_matches_in: dict = {}   # año WC -> partidos jugados en él
@@ -132,6 +134,12 @@ def _neutral_series(name_es_or_team: str, h: "_TeamHistory",
         "xg_against_last10": float(np.mean(h.ga10)) if h.ga10 else 1.25,
         "form_last5_points_pct": (float(np.mean(h.pts5)) / 3.0
                                   if h.pts5 else 0.5),
+        "form_last10_points_pct": (float(np.mean(h.pts10)) / 3.0
+                                   if h.pts10 else 0.5),
+        "form_std10": (float(np.std(h.pts10)) / 3.0
+                       if len(h.pts10) >= 3 else 0.0),
+        "form_comp5_points_pct": (float(np.mean(h.ptsC5)) / 3.0
+                                  if h.ptsC5 else 0.5),
         "market_value_meur": 1.0,            # log(1)=0 -> neutro
         "avg_caps": 0.0,
         "players_with_wc_experience": 0.0,
@@ -150,7 +158,8 @@ def load_results() -> pd.DataFrame:
 def build_historical_dataset(cutoff: str | None = None, *,
                              home_adv_elo: float = 100.0,
                              k_mult: float = 1.0,
-                             half_life: float = DECAY_HALF_LIFE_YEARS) -> dict:
+                             half_life: float = DECAY_HALF_LIFE_YEARS,
+                             feature_names: list[str] | None = None) -> dict:
     """Recorre la historia una sola vez y devuelve:
 
     - X, y, w           : filas equipo-partido para el modelo de Poisson
@@ -165,6 +174,7 @@ def build_historical_dataset(cutoff: str | None = None, *,
     `home_adv_elo`, `k_mult`, `half_life`: hiperparámetros del ELO/decaimiento
     (defaults = los de producción), expuestos para tuneo leak-free.
     """
+    cols = feature_names if feature_names is not None else FEATURE_NAMES
     df = load_results()
     if cutoff is not None:
         df = df[df["date"] < pd.Timestamp(cutoff)].reset_index(drop=True)
@@ -247,8 +257,12 @@ def build_historical_dataset(cutoff: str | None = None, *,
         ha.dfn = float(np.clip(ha.dfn - PI_LR * err_b, -PI_CLIP, PI_CLIP))
         ha.gf10.append(gh); ha.ga10.append(ga_)
         hb.gf10.append(ga_); hb.ga10.append(gh)
-        ha.pts5.append(3 if gh > ga_ else (1 if gh == ga_ else 0))
-        hb.pts5.append(3 if ga_ > gh else (1 if gh == ga_ else 0))
+        pa_pts = 3 if gh > ga_ else (1 if gh == ga_ else 0)
+        pb_pts = 3 if ga_ > gh else (1 if gh == ga_ else 0)
+        ha.pts5.append(pa_pts); hb.pts5.append(pb_pts)
+        ha.pts10.append(pa_pts); hb.pts10.append(pb_pts)
+        if r.tournament.lower() != "friendly":        # forma competitiva
+            ha.ptsC5.append(pa_pts); hb.ptsC5.append(pb_pts)
         ha.last_date = r.date; hb.last_date = r.date
         ha.n_matches += 1; hb.n_matches += 1
         if is_wc:
@@ -257,12 +271,12 @@ def build_historical_dataset(cutoff: str | None = None, *,
             hb.wc_matches_in[year] = hb.wc_matches_in.get(year, 0) + 1
 
     return {
-        "X": pd.DataFrame(rows, columns=FEATURE_NAMES),
+        "X": pd.DataFrame(rows, columns=cols),
         "y": pd.Series(goals, name="goals_scored"),
         "w": np.array(weights),
         "row_dates": pd.Series(row_dates, name="date"),
-        "X_match": pd.DataFrame(m_rows, columns=FEATURE_NAMES),
-        "X_match_away": pd.DataFrame(m_rows_b, columns=FEATURE_NAMES),
+        "X_match": pd.DataFrame(m_rows, columns=cols),
+        "X_match_away": pd.DataFrame(m_rows_b, columns=cols),
         "y_result": pd.Series(m_labels, name="result_1x2"),
         "w_match": np.array(m_weights),
         "match_dates": pd.Series(m_dates, name="date"),

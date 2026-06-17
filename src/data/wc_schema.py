@@ -44,6 +44,12 @@ FEATURES: list[FeatureSpec] = [
                 "que enfrenta el ataque propio)", "z-score"),
     FeatureSpec("form_diff", "float", "1_rendimiento",
                 "form_last5_points_pct propio - rival", "ya en [-1,1]"),
+    FeatureSpec("form_competitive_diff", "float", "1_rendimiento",
+                "forma en partidos NO amistosos (últimos 5) propia - rival. "
+                "Validada leak-free (experiment_features.py): baja el RPS del "
+                "backtest 0.1982->0.1971; la única candidata de la Parte 2 que "
+                "aporta señal real (los amistosos engañan a la forma simple).",
+                "ya en [-1,1]"),
     # ---- Categoría 2: contexto y logística ----
     FeatureSpec("is_host_own", "bool", "2_contexto",
                 "el equipo juega en su propio país", "0/1"),
@@ -72,6 +78,26 @@ FEATURES: list[FeatureSpec] = [
 ]
 
 FEATURE_NAMES = [f.name for f in FEATURES]
+
+# Features CANDIDATAS (Parte 2): se computan siempre en build_match_features
+# pero NO entran en producción. Medidas leak-free (scripts/experiment_features.py):
+# momentum_diff y form10_diff dan Δ−0.0001 (ruido) y EMPEORAN al combinarse con
+# form_competitive_diff; form_std_diff da Δ+0.0001 (peor). Solo
+# form_competitive_diff aportó señal real y FUE PROMOVIDA a FEATURES arriba.
+# Estas quedan documentadas como descartadas, inertes para producción.
+CANDIDATE_FEATURES: list[FeatureSpec] = [
+    FeatureSpec("momentum_diff", "float", "1_rendimiento",
+                "tendencia (forma5 − forma10) propia − rival: + = subiendo "
+                "[descartada: Δ−0.0001, ruido]", "ya en [-1,1]"),
+    FeatureSpec("form10_diff", "float", "1_rendimiento",
+                "forma (pts%) últimos 10 propia − rival "
+                "[descartada: Δ−0.0001, ruido]", "ya en [-1,1]"),
+    FeatureSpec("form_std_diff", "float", "1_rendimiento",
+                "consistencia: std de pts últimos 10, propia − rival "
+                "[descartada: Δ+0.0001, peor]", "ya en [0,1] aprox"),
+]
+CANDIDATE_NAMES = [f.name for f in CANDIDATE_FEATURES]
+ALL_FEATURE_NAMES = FEATURE_NAMES + CANDIDATE_NAMES
 
 # Columnas requeridas en el CSV de equipos (files/f0_raw/teams_*.csv)
 TEAM_COLUMNS = [
@@ -113,11 +139,35 @@ def build_match_features(own: pd.Series, opp: pd.Series,
                                - own["injury_impact_index"]),
         "matchday_2": float(matchday == 2),
         "matchday_3": float(matchday == 3),
+        # ---- features candidatas (inertes hasta validarse, ver schema) ----
+        **_candidate_features(own, opp),
     }
 
 
-def match_features_frame(rows: list[dict]) -> pd.DataFrame:
-    return pd.DataFrame(rows, columns=FEATURE_NAMES)
+def _candidate_features(own: pd.Series, opp: pd.Series) -> dict:
+    """Features candidatas de la Parte 2. Usan .get con defaults para no
+    romper el modo sintético (filas sin estos campos)."""
+    def g(s, k, default=0.0):
+        try:
+            v = s.get(k, default)
+        except AttributeError:
+            v = s[k] if k in s else default
+        return float(default if v is None else v)
+    o5, a5 = g(own, "form_last5_points_pct", 0.5), g(opp, "form_last5_points_pct", 0.5)
+    o10 = g(own, "form_last10_points_pct", o5)
+    a10 = g(opp, "form_last10_points_pct", a5)
+    return {
+        "momentum_diff": (o5 - o10) - (a5 - a10),
+        "form10_diff": o10 - a10,
+        "form_std_diff": g(own, "form_std10") - g(opp, "form_std10"),
+        "form_competitive_diff": (g(own, "form_comp5_points_pct", o5)
+                                  - g(opp, "form_comp5_points_pct", a5)),
+    }
+
+
+def match_features_frame(rows: list[dict],
+                         columns: list[str] | None = None) -> pd.DataFrame:
+    return pd.DataFrame(rows, columns=columns or FEATURE_NAMES)
 
 
 def schema_as_dataframe() -> pd.DataFrame:
