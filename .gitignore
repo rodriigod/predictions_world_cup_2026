@@ -76,3 +76,12 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+files/cache/
+
+# Artefactos generados localmente (regenerables)
+*.log
+results/pre_match/
+results/optuna/*.png
+files/lineups/*.json
+!files/lineups/template.json

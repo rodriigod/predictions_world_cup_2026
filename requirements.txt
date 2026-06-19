@@ -36,6 +36,8 @@ python-dotenv==1.0.0
 pyyaml==6.0.1
 tqdm==4.66.1
 requests==2.31.0
+beautifulsoup4>=4.12.0   # scraper FBref del motor pre-partido (V3)
+optuna>=3.5.0            # tuning leak-free (Parte 2)
 
 # Data Validation
 great-expectations==0.17.12

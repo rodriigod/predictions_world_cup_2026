@@ -43,7 +43,7 @@ def group_report(g: str, matches: pd.DataFrame,
             f"| {_pred_text(fx)} "
             f"| {_fmt_pct(fx.p_win_a)} | {_fmt_pct(fx.p_draw)} "
             f"| {_fmt_pct(fx.p_win_b)} "
-            f"| {fx.exp_goals_a:.1f} - {fx.exp_goals_b:.1f} |")
+            f"| {fx.exp_goals_a:.2f} - {fx.exp_goals_b:.2f} |")
     lines.append("")
     lines.append("P(1) = gana el primer equipo · P(X) = empate · "
                  "P(2) = gana el segundo equipo.")
@@ -82,8 +82,9 @@ def full_report(matches: pd.DataFrame, standings: pd.DataFrame,
         "**Clasifican a 16avos:** los 2 primeros de cada grupo + los 8 "
         "mejores terceros de los 12 grupos.",
         "",
-        "El 🎯 Pronóstico es el resultado 1X2 más probable con su marcador "
-        "más frecuente (útil para llenar la polla). Las probabilidades "
+        "El 🎯 Pronóstico es el marcador que MAXIMIZA los puntos esperados de "
+        "la polla (E[pts]=3·P(resultado)+2·P(marcador)): prioriza acertar el "
+        "1X2 y afina el marcador dentro de ese resultado. Las probabilidades "
         "muestran cuán confiable es cada pronóstico.",
         "",
     ]
@@ -137,10 +138,10 @@ def polla_sheet(matches: pd.DataFrame) -> str:
     lines = [
         "# ✍️ MI POLLA — Mundial 2026, Fase de Grupos",
         "",
-        "Marcador pronosticado por el modelo para cada casilla "
-        "(el más probable condicionado al resultado 1X2 predicho). "
-        "Los partidos parejos (|P(1) − P(2)| ≤ 3 pts) se marcan como "
-        "empate.",
+        "Marcador pronosticado por el modelo para cada casilla = el que "
+        "MAXIMIZA los puntos esperados de la polla "
+        "(E[pts]=3·P(resultado)+2·P(marcador)): primero acertar 1X2, luego "
+        "afinar el marcador.",
         "",
     ]
     standings = _polla_standings(matches)

@@ -157,19 +157,6 @@ def dc_1x2(lam_a: float, lam_b: float, rho: float = DC_RHO
             float(np.triu(m, 1).sum()))
 
 
-def _modal_score_given_result(tally: "_MatchTally",
-                              result: str) -> tuple[tuple[int, int], int]:
-    """Marcador más frecuente entre las simulaciones con ese 1X2."""
-    if result == "1":
-        ok = lambda s: s[0] > s[1]
-    elif result == "2":
-        ok = lambda s: s[0] < s[1]
-    else:
-        ok = lambda s: s[0] == s[1]
-    candidates = [(s, c) for s, c in tally.scores.items() if ok(s)]
-    return max(candidates, key=lambda x: x[1])
-
-
 @dataclass
 class _Standing:
     points: int = 0
@@ -551,33 +538,34 @@ class GroupStageSimulator:
         most_likely = [t.scores.most_common(1)[0] for t in tallies]
         matches["most_likely_score"] = [f"{s[0][0]}-{s[0][1]}" for s in most_likely]
         matches["p_most_likely_score"] = [s[1] / n_sims for s in most_likely]
-        # resultado 1X2 más probable de cada partido
-        def _most_likely(t):
-            return ("1" if t.win_a >= max(t.draw, t.win_b)
-                    else ("X" if t.draw >= t.win_b else "2"))
-        # "Empate técnico": cuando ganar le es casi igual de probable a
-        # ambos lados (|P(1) - P(2)| <= DRAW_MARGIN_PP puntos porcentuales,
-        # medidos como se muestran en el reporte), el partido se marca como
-        # empate aunque haya un favorito leve. No aplica a partidos ya
-        # jugados (resultado real fijo).
-        DRAW_MARGIN_PP = 3
-        pred_result = []
-        for i, t in enumerate(tallies):
-            r = _most_likely(t)
-            if i not in self._fixed and r != "X":
-                diff_pp = abs(round(100 * t.win_a / n_sims)
-                              - round(100 * t.win_b / n_sims))
-                if diff_pp <= DRAW_MARGIN_PP:
-                    r = "X"
-            pred_result.append(r)
-        matches["pred_result"] = pred_result
-        # marcador pronosticado: el más frecuente CONDICIONADO al
-        # resultado 1X2 pronosticado (consistente para llenar la polla)
-        pred_scores = [
-            _modal_score_given_result(t, r)
-            for t, r in zip(tallies, matches["pred_result"])]
-        matches["pred_score"] = [f"{s[0]}-{s[1]}" for s, _ in pred_scores]
-        matches["p_pred_score"] = [c / n_sims for _, c in pred_scores]
+        # Marcador pronosticado: el que MAXIMIZA los puntos esperados de la
+        # polla. Si predices un marcador s con resultado r, ganas 5 si es
+        # exacto y 3 si solo aciertas el resultado, así que
+        #   E[pts] = 5·P(s) + 3·(P(r) − P(s)) = 3·P(r) + 2·P(s).
+        # Domina 3·P(r) -> el resultado (1X2) sale casi siempre el más
+        # probable; el 2·P(s) afina el marcador DENTRO de ese resultado.
+        # Mejor para la polla que redondear λ: recupera 1-0/2-0/0-0 reales.
+        # En partidos ya jugados scores tiene solo el marcador real -> lo elige.
+        def _best_score(t):
+            pr = {"1": t.win_a / n_sims, "X": t.draw / n_sims,
+                  "2": t.win_b / n_sims}
+            best, best_e = (0, 0, "X", 0), -1.0
+            for (a, b), c in t.scores.items():
+                r = "1" if a > b else ("2" if a < b else "X")
+                e = 3 * pr[r] + 2 * (c / n_sims)
+                if e > best_e:
+                    best, best_e = (a, b, r, c), e
+            return best
+        bests = [_best_score(t) for t in tallies]
+        matches["pred_score"] = [f"{a}-{b}" for a, b, _r, _c in bests]
+        matches["pred_result"] = [r for _a, _b, r, _c in bests]
+        matches["p_pred_score"] = [c / n_sims for _a, _b, _r, c in bests]
+        # Marcador alternativo por REDONDEO mitad-arriba de los goles esperados
+        # (1.5->2, 1.4->1...). No es producción (nunca da 0); se guarda para
+        # comparar contra el óptimo (ver README / scripts/microsim_groupstage).
+        matches["pred_score_round"] = [
+            f"{int(np.floor(t.goals_a / n_sims + 0.5))}-"
+            f"{int(np.floor(t.goals_b / n_sims + 0.5))}" for t in tallies]
         matches["status"] = ["JUGADO" if i in self._fixed else "pendiente"
                              for i in range(len(self.fixtures))]
         return standings, matches

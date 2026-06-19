@@ -1,0 +1,34 @@
+{
+  "home_team": "Argentina",
+  "away_team": "España",
+  "is_neutral": true,
+  "home_odds": 2.60,
+  "draw_odds": 3.10,
+  "away_odds": 2.80,
+  "home_lineup": [
+    {"name": "Emiliano Martínez",  "position": "GK"},
+    {"name": "Nahuel Molina",       "position": "FB"},
+    {"name": "Cristian Romero",     "position": "CB"},
+    {"name": "Lisandro Martínez",   "position": "CB"},
+    {"name": "Nicolás Tagliafico",  "position": "FB"},
+    {"name": "Rodrigo De Paul",     "position": "MF"},
+    {"name": "Enzo Fernández",      "position": "MF"},
+    {"name": "Alexis Mac Allister", "position": "MF"},
+    {"name": "Lionel Messi",        "position": "AM"},
+    {"name": "Julián Álvarez",      "position": "FW"},
+    {"name": "Lautaro Martínez",    "position": "FW"}
+  ],
+  "away_lineup": [
+    {"name": "Unai Simón",          "position": "GK"},
+    {"name": "Dani Carvajal",       "position": "FB"},
+    {"name": "Aymeric Laporte",     "position": "CB"},
+    {"name": "Robin Le Normand",    "position": "CB"},
+    {"name": "Alejandro Grimaldo",  "position": "FB"},
+    {"name": "Rodri",               "position": "MF"},
+    {"name": "Pedri",               "position": "MF"},
+    {"name": "Fabián Ruiz",         "position": "MF"},
+    {"name": "Lamine Yamal",        "position": "WF"},
+    {"name": "Álvaro Morata",       "position": "FW"},
+    {"name": "Nico Williams",       "position": "WF"}
+  ]
+}

@@ -138,6 +138,34 @@ def test_blend_with_market_alpha_extremes():
     assert np.isclose(res.at[0, "p_home"], 0.5)
 
 
+def test_match_engine_micro_and_blend():
+    """Motor pre-partido (V3): probabilidades válidas, equipo fuerte favorito,
+    blend en log-odds que suma 1 y respeta los extremos de alpha."""
+    from src.simulation.match_engine import (Player, Squad, blend_predictions,
+                                             simulate_match)
+
+    def squad(name, atk):
+        ps = [Player("GK", "GK", psxg_save_pct=0.74)]
+        ps += [Player(f"{name}{i}", pos, npxg_p90=a)
+               for i, (pos, a) in enumerate(
+                   zip(["FB", "CB", "CB", "FB", "MF", "MF", "AM", "WF", "FW", "WF"],
+                       atk))]
+        return Squad(name, ps)
+
+    strong = squad("S", [.05, .04, .04, .05, .08, .10, .20, .30, .45, .28])
+    weak = squad("W", [.03, .02, .02, .03, .05, .05, .08, .10, .15, .10])
+    res = simulate_match(strong, weak, n_sims=2000)
+    assert np.isclose(res["p_home_win"] + res["p_draw"] + res["p_away_win"], 1.0)
+    assert res["lambda_home"] > res["lambda_away"]      # el fuerte genera más
+    assert res["p_home_win"] > res["p_away_win"]
+
+    b = blend_predictions([0.5, 0.3, 0.2], [0.3, 0.3, 0.4], alpha=0.65,
+                          p_market=[0.45, 0.30, 0.25], beta=0.2)
+    assert np.isclose(sum(b), 1.0)
+    only_stat = blend_predictions([0.5, 0.3, 0.2], [0.3, 0.3, 0.4], alpha=1.0)
+    assert np.allclose(only_stat, [0.5, 0.3, 0.2], atol=1e-6)
+
+
 def test_simulation_probabilities_consistent(model, teams, fixtures):
     sim = GroupStageSimulator(teams, fixtures, model, seed=7)
     standings, matches = sim.run(n_sims=400)

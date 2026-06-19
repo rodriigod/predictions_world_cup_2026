@@ -50,7 +50,8 @@ EN2ES.update({
     "Czechia": "Rep. Checa", "Czech Republic": "Rep. Checa",
     "Cape Verde Islands": "Cabo Verde", "Ivory Coast": "Costa de Marfil",
     "Côte d'Ivoire": "Costa de Marfil", "Curacao": "Curazao",
-    "Bosnia and Herzegovina": "Bosnia y Her.", "DR Congo": "RD Congo",
+    "Bosnia and Herzegovina": "Bosnia y Her.",
+    "Bosnia & Herzegovina": "Bosnia y Her.", "DR Congo": "RD Congo",
     "Saudi Arabia": "Arabia S.", "New Zealand": "Nueva Zelanda",
 })
 

@@ -58,6 +58,17 @@ The **full tournament is simulated 50,000 times** (~90 s):
 
 Outputs: per-team probabilities (win group, advance, reach each round, **win the title**), per-match 1X2 probabilities and the most likely scoreline consistent with the predicted outcome.
 
+### 4b. Scoreline rule — two methods (`pred_score` vs `pred_score_round`)
+
+The filled-in scoreline can be derived two ways; both are in `match_predictions.csv`:
+
+| Method | How | Behaviour | On 27 played group games |
+|---|---|---|:-:|
+| **Expected-points (production, `pred_score`)** | argmax over simulated scores of `E[pts]=3·P(result)+2·P(score)` | recovers realistic **1-0, 2-0, 0-0** (66/144 clean sheets) | **44 pts**, 14/27 results, 1 exact |
+| Round-half-up (`pred_score_round`) | `round(expected goals)` (1.5→2, 1.4→1) | **never predicts 0**, mostly 2-1/1-2 | 46 pts, 14/27 results, 2 exact |
+
+**Key finding:** the **W/D/L accuracy is identical either way (14/27 ≈ 52%)** — the result is decided by the model, *not* by the scoreline rule. Total points are within noise on 27 games (the expected-points method is optimal *in the long run*; rounding got lucky with one extra exact here). Production uses the expected-points scoreline because it is principled and produces realistic scorelines.
+
 ### 5. Backtest — does the model actually work? (`scripts/backtest_world_cups.py`)
 
 The method is validated on **448 matches across 7 past World Cups (1998–2022)**. For each tournament every model is trained **only on matches played before it** (same pre-tournament protocol used for 2026), then predicts every match. Run with `python scripts/backtest_world_cups.py`.
@@ -113,6 +124,10 @@ python scripts/update_team_data.py
 # train + simulate the whole tournament (pre-tournament mode)
 python scripts/run_groups_simulation.py --sims 50000
 
+# predict ANY country vs country (W/D/L), using all international history
+python scripts/predict_match.py "Brazil" "Argentina"
+python scripts/predict_match.py --evaluate     # ~60% accuracy on 4.5k held-out games
+
 # validate the method on past World Cups (1998-2022), + save calibration plot
 python scripts/backtest_world_cups.py --plots
 
@@ -128,6 +143,16 @@ python scripts/run_groups_simulation.py --sims 50000 --alpha 0.3   # 0.3·model 
 Useful flags: `--backend poisson|gbm|xgb` · `--train historical|synthetic` · `--cutoff 2026-06-11` (ignore everything from this date on; `--cutoff none` to include matches already played) · `--no-classifier` · `--half-life 3.0` (temporal-decay half-life in years) · `--noise-sigma 0.10` (per-match lognormal "luck" noise in the Monte Carlo) · `--alpha 1.0` (market blend: 1.0 = model only, 0.0 = market only, 0.5 = half-and-half) · `--odds <csv>`.
 
 > 💸 **Market blend (`blend_with_market`).** Bookmaker 1X2 odds are the strongest external predictor, so the simulator can fold them in: for each match it takes the model's Dixon-Coles 1X2, de-margins the market odds to probabilities, blends them as a **log-linear opinion pool** (`p ∝ p_model^α · p_market^(1−α)`), then **re-solves the (λ_a, λ_b)** that reproduce the blended 1X2 — so the Monte Carlo still samples scorelines, now anchored to the market. `--alpha` is the model weight (default `1.0` = unchanged). Get the odds with `scripts/fetch_odds_2026.py` (the-odds-api, or a hand-filled `files/f0_raw/odds_2026.csv`). This is the highest-ROI upgrade for the actual pool — and unlike historical odds, current 2026 odds are freely available right now.
+>
+> **How much weight to the market? (measured, `validate_blend_alpha.py`).** No free historical World-Cup odds exist (OddsPortal is JS-obfuscated; odds APIs charge for history), so the blend was validated on **130k club matches that DO carry Bet365 odds + pre-match ELO** (leak-free, train ≤2018 / test ≥2018). Result: a simple ELO model scores RPS 0.206, the **market alone scores 0.201**, and the optimal blend weight is **α≈0.0 (trust the market)** — adding model weight only worsened RPS. Read-through for 2026: lean heavily on the market when it's available; the production `--alpha 0.3` (70% market) is on the right side, and the data would even support a touch lower. (Our WC model is stronger than a bare ELO, so a small model weight is still defensible — but the market clearly dominates.)
+
+> 🧩 **Pre-match 11v11 engine (V3, standalone — `scripts/pre_match.py`).** A separate manual tool for when you know the actual starting line-ups: it derives each team's λ from the 11 starters' per-90 stats (npxG, pressures, GK PSxG-save%), micro-simulates the match, and blends it with the historical model **and** the market (log-odds, `--alpha`/`--beta`). It does **not** touch the main pipeline. Player stats come from FBref — but **FBref returns HTTP 403 to scrapers**, so in practice you pass stats by hand in the line-up JSON (any stat field present overrides the scraper) or it falls back to position-average defaults.
+>
+> **Is the engine signal or noise? (measured, `validate_microsim.py`).** Ran on **192 real line-ups from the 2014/2018/2022 World Cups** (Fjelstul DB). Two scenarios: **(A)** with position defaults only (what you actually get without per-player stats) → λ is **identical for both teams**, correlation with results **+0.00, win-rate flat** = literally **zero signal**. **(B)** feeding a leak-free per-player attacking proxy (prior-WC goals) → λ correlates with the real margin (**Pearson +0.33**) and the home win-rate climbs **30% → 61%** from the low to high λ tercile. **Verdict: the engine mechanism works — but only if fed real per-player quality.** The bottleneck is 100% the player-stat data (which FBref blocks), not the model.
+>
+> **Player data — solved via FIFA ratings (`src/data/fifa_ratings.py`).** Since FBref blocks scrapers, the engine now draws per-player quality from the freely-downloadable **FIFA-24 player dataset** (~5.7k players, 135 countries: finishing, shot_power, GK ratings…). Run `python scripts/pre_match.py --lineup … --stats fifa` (default). It's a video-game *proxy* (not real npxG) and matches ~5-6 of 11 names per side (accents/short names miss → position default), but it makes λ differentiate by real squad quality (e.g. Argentina λ 1.69 vs España 1.44) — good enough to predict current matches, the bottleneck the engine needed.
+>
+> **Does blending the micro into the group-stage forecast help? No (measured, `microsim_groupstage.py`).** Auto-picking each country's XI from FIFA and blending the micro's λ into the production model, scored against the 27 played group matches: model **46 polla pts** vs model+micro **41** at micro-weight 0.3 (**−5**), and a tie at weight 0.15. The micro never improves the pool — consistent with every other ensemble test here. It also can't cover smaller nations (Qatar, Uzbekistan, Iran… have <11 players in the FIFA set). Use it for line-up what-ifs, not as a forecaster.
 
 Outputs land in:
 
@@ -160,6 +185,13 @@ src/
 scripts/
 ├── update_team_data.py   # refresh ELO (live) + market values
 ├── fetch_odds_2026.py        # download/prepare bookmaker 1X2 odds for the blend
+├── fetch_wc_odds_historical.py # (best-effort) historical WC odds — OddsPortal not scrapable
+├── scrape_oddsportal_wc.py     # (optional) Selenium scraper for OddsPortal WC odds
+├── validate_blend_alpha.py     # measure the optimal market-blend α on real odds data
+├── validate_microsim.py        # test the V3 engine for signal on real WC line-ups
+├── predict_match.py            # GENERAL any-country A-vs-B W/D/L predictor (+ --evaluate)
+├── microsim_groupstage.py      # group-stage A/B test: model vs model+microsim (polla pts)
+├── pre_match.py              # V3: 11v11 micro-sim from real line-ups (standalone)
 ├── run_groups_simulation.py  # end-to-end pipeline (--half-life, --noise-sigma, --alpha)
 ├── update_scorecard.py       # log real results into the README scorecard
 ├── backtest_world_cups.py    # validation on past World Cups (1998-2022, --plots)
@@ -175,9 +207,53 @@ files/f0_raw/             # datasets (results, teams, fixtures)
 
 ---
 
+# 🧾 Project log — everything built & everything tried (honest)
+
+A complete, honest record of the work — including the dead ends, because knowing what *doesn't* work is half the value.
+
+### ✅ Adopted — measurably improved the model
+| Change | Effect |
+|---|---|
+| **Pi-ratings** (online attack/defence, Constantinou & Fenton) | RPS 0.2009 → 0.1982 |
+| **Decay half-life 8 → 3 years** | national-team convention; neutral-to-positive |
+| **Competitive-form feature** (form in non-friendly games only) | RPS → **0.1971**; only Part-2 feature that survived |
+| **Monte Carlo 10k → 50k** | tighter tail probabilities |
+| **Analytic Dixon-Coles draw** (`p_*_dc` = matrix diagonal) | correct P(draw), not a heuristic |
+| **Expected-points scoreline** (`3·P(result)+2·P(score)`) | realistic 1-0/2-0/0-0; optimal for the pool |
+| **Live market-odds blend** (`--alpha`, the-odds-api) | folds bookmaker 1X2 into upcoming matches |
+
+### 🧰 Capabilities/tools added
+- **General A-vs-B predictor** (`predict_match.py`) — any two countries → W/D/L, **60% accuracy** on 4.5k held-out internationals.
+- **Pre-match 11v11 micro-sim** (`match_engine.py`) + **FIFA-24 player ratings** (`fifa_ratings.py`) as the per-player data source (FBref blocks scrapers).
+- **Backtest** over 7 World Cups + calibration plot; **scorecard updater**; **α-blend validation**; **micro-sim validation**; **group-stage A/B test**.
+
+### ❌ Measured and discarded — negative results (don't re-try)
+| Idea | Verdict |
+|---|---|
+| **FIFA world ranking** as a feature | **zero** value — internal ELO is a *better* predictor (RPS 0.171 vs 0.204) |
+| **Stacking** (logistic+RF+XGBoost, even time-series OOF + isotonic) | worse than Poisson+DC on every metric (0.204 vs 0.197) |
+| **Hyper-parameter tuning** (α, ρ, temperature; ELO K/home/half-life) | current defaults already optimal; WC-test "gains" were overfitting |
+| **Momentum / form-10 / form-variance** features | no gain or worse |
+| **Host-continent** feature | no gain (ELO already captures it) |
+| **Confederation draw adjustment** | helps general games, *hurts* World Cups (regional artifact) |
+| **"Even match = draw" heuristic** | not data-backed (even games still have a winner) — dropped |
+| **Micro-sim as a forecaster** | no signal without player stats; *with* FIFA ratings it still **doesn't improve the pool** (group A/B: −5 / 0 pts) |
+| Optuna tuner | built (`optuna_tuner.py`) but not promoted — prior leak-free tuning already showed defaults hold |
+
+### 🔌 Data sources — used & explored
+- **Used:** martj42 international_results (~49k matches, the core), eloratings.net, Transfermarkt, **the-odds-api** (live odds), **FIFA-24 player dataset** (micro-sim), club Bet365 dataset (α validation), **Fjelstul WC DB** (lineups for micro-sim validation).
+- **Dead ends:** OddsPortal (JS-obfuscated, not scrapable), OSF/ISDB (results only, no odds), football-data.co.uk (club leagues only, no national-team odds), historical World-Cup odds (no free source exists).
+
+### 📌 Honest bottom line
+- **Ceiling reached:** ~**60%** accuracy on general internationals, ~**54%** on World-Cup matches, **RPS 0.197** (academic SOTA without odds). The scoreline rule does **not** change W/D/L accuracy.
+- **The one real lever** beyond team strength is **bookmaker odds** — and the blend validation shows the market dominates, so lean on it when available.
+- **The micro-sim** is a working engine starved of data; useful for line-up what-ifs, not as a forecaster.
+
+---
+
 # 🏆 PREDICTED RESULTS — FULL TOURNAMENT
 
-*Pre-tournament prediction (trained only on data before 2026-06-11, no played matches used). Scores are the most likely scoreline consistent with the predicted 1X2 outcome; **evenly-matched games (|P(1) − P(2)| ≤ 3 pts) are called as draws**. Generated by the current model (pi-ratings + competitive-form + 3-yr decay, 50,000 sims). Regenerate with `python scripts/run_groups_simulation.py --sims 50000`.*
+*Forecast of the current model **blended with live bookmaker odds** (`--alpha 0.3` → 30% model + 70% market, via the-odds-api) on the 49 upcoming matches; already-played games keep the pure-model pick (no market odds exist for them). Scores are the most likely scoreline consistent with the predicted 1X2; **even games (|P(1) − P(2)| ≤ 3 pts) are called draws**. Reproduce the pure pre-tournament model with `--alpha 1.0`. Regenerate: `python scripts/fetch_odds_2026.py && python scripts/run_groups_simulation.py --sims 50000 --alpha 0.3`.*
 
 ## Group stage — all 72 matches
 
@@ -188,24 +264,24 @@ files/f0_raw/             # datasets (results, teams, fixtures)
 |---|:-:|
 | México – Sudáfrica | **2-0** |
 | Corea del Sur – Rep. Checa | **1-0** |
-| Rep. Checa – Sudáfrica | **2-1** |
+| Rep. Checa – Sudáfrica | **1-0** |
 | México – Corea del Sur | **1-0** |
-| Rep. Checa – México | **0-2** |
+| Rep. Checa – México | **0-1** |
 | Sudáfrica – Corea del Sur | **0-2** |
 
 Table: **México 9** · **Corea del Sur 6** · **Rep. Checa 3 ✦** · Sudáfrica 0
 
-### Group B — Canadá, Suiza, Bosnia y Her. ✦
+### Group B — Suiza, Canadá, Bosnia y Her. ✦
 | Match | Score |
 |---|:-:|
 | Canadá – Bosnia y Her. | **2-0** |
-| Catar – Suiza | **0-2** |
+| Catar – Suiza | **0-3** |
 | Suiza – Bosnia y Her. | **2-0** |
 | Canadá – Catar | **2-0** |
-| Suiza – Canadá | **0-1** |
-| Bosnia y Her. – Catar | **2-1** |
+| Suiza – Canadá | **1-0** |
+| Bosnia y Her. – Catar | **2-0** |
 
-Table: **Canadá 9** · **Suiza 6** · **Bosnia y Her. 3 ✦** · Catar 0
+Table: **Suiza 9** · **Canadá 6** · **Bosnia y Her. 3 ✦** · Catar 0
 
 ### Group C — Brasil, Marruecos, Escocia ✦
 | Match | Score |
@@ -213,107 +289,107 @@ Table: **Canadá 9** · **Suiza 6** · **Bosnia y Her. 3 ✦** · Catar 0
 | Brasil – Marruecos | **1-0** |
 | Haití – Escocia | **0-1** |
 | Escocia – Marruecos | **0-1** |
-| Brasil – Haití | **2-0** |
-| Escocia – Brasil | **1-2** |
+| Brasil – Haití | **3-0** |
+| Escocia – Brasil | **0-2** |
 | Marruecos – Haití | **2-0** |
 
 Table: **Brasil 9** · **Marruecos 6** · **Escocia 3 ✦** · Haití 0
 
-### Group D — Turquía, EEUU
+### Group D — EEUU, Turquía
 | Match | Score |
 |---|:-:|
-| EEUU – Paraguay | **1-1** |
-| Australia – Turquía | **1-1** |
-| EEUU – Australia | **1-1** |
+| EEUU – Paraguay | **1-0** |
+| Australia – Turquía | **0-1** |
+| EEUU – Australia | **2-1** |
 | Turquía – Paraguay | **1-0** |
-| Turquía – EEUU | **1-1** |
-| Paraguay – Australia | **1-1** |
+| Turquía – EEUU | **1-2** |
+| Paraguay – Australia | **1-0** |
 
-Table: **Turquía 5** · **EEUU 3** · Australia 3 · Paraguay 2
+Table: **EEUU 9** · **Turquía 6** · Paraguay 3 · Australia 0
 
 ### Group E — Alemania, Ecuador, Costa de Marfil ✦
 | Match | Score |
 |---|:-:|
 | Alemania – Curazao | **2-0** |
 | Costa de Marfil – Ecuador | **0-1** |
-| Alemania – Costa de Marfil | **1-0** |
-| Ecuador – Curazao | **2-0** |
+| Alemania – Costa de Marfil | **2-0** |
+| Ecuador – Curazao | **3-0** |
 | Curazao – Costa de Marfil | **0-2** |
-| Ecuador – Alemania | **1-1** |
+| Ecuador – Alemania | **0-1** |
 
-Table: **Alemania 7** · **Ecuador 7** · **Costa de Marfil 3 ✦** · Curazao 0
+Table: **Alemania 9** · **Ecuador 6** · **Costa de Marfil 3 ✦** · Curazao 0
 
 ### Group F — Países Bajos, Japón
 | Match | Score |
 |---|:-:|
-| Países Bajos – Japón | **1-1** |
-| Suecia – Túnez | **1-1** |
+| Países Bajos – Japón | **1-0** |
+| Suecia – Túnez | **1-0** |
 | Países Bajos – Suecia | **2-0** |
 | Túnez – Japón | **0-1** |
-| Japón – Suecia | **2-0** |
+| Japón – Suecia | **2-1** |
 | Túnez – Países Bajos | **0-2** |
 
-Table: **Países Bajos 7** · **Japón 7** · Túnez 1 · Suecia 1
+Table: **Países Bajos 9** · **Japón 6** · Suecia 3 · Túnez 0
 
-### Group G — Bélgica, Irán
+### Group G — Bélgica, Egipto, Irán ✦
 | Match | Score |
 |---|:-:|
 | Bélgica – Egipto | **1-0** |
 | Irán – Nueva Zelanda | **1-0** |
-| Bélgica – Irán | **2-1** |
+| Bélgica – Irán | **2-0** |
 | Nueva Zelanda – Egipto | **0-1** |
-| Egipto – Irán | **0-1** |
+| Egipto – Irán | **1-0** |
 | Nueva Zelanda – Bélgica | **0-2** |
 
-Table: **Bélgica 9** · **Irán 6** · Egipto 3 · Nueva Zelanda 0
+Table: **Bélgica 9** · **Egipto 6** · **Irán 3 ✦** · Nueva Zelanda 0
 
-### Group H — España, Uruguay, Arabia S. ✦
+### Group H — España, Uruguay
 | Match | Score |
 |---|:-:|
-| España – Cabo Verde | **2-0** |
+| España – Cabo Verde | **3-0** |
 | Arabia S. – Uruguay | **0-1** |
-| España – Arabia S. | **2-0** |
-| Uruguay – Cabo Verde | **2-0** |
+| España – Arabia S. | **3-0** |
+| Uruguay – Cabo Verde | **1-0** |
 | Cabo Verde – Arabia S. | **1-2** |
 | Uruguay – España | **0-1** |
 
-Table: **España 9** · **Uruguay 6** · **Arabia S. 3 ✦** · Cabo Verde 0
+Table: **España 9** · **Uruguay 6** · Arabia S. 3 · Cabo Verde 0
 
 ### Group I — Francia, Noruega, Senegal ✦
 | Match | Score |
 |---|:-:|
 | Francia – Senegal | **1-0** |
 | Irak – Noruega | **0-2** |
-| Francia – Irak | **2-0** |
+| Francia – Irak | **3-0** |
 | Noruega – Senegal | **1-0** |
 | Noruega – Francia | **1-2** |
 | Senegal – Irak | **2-0** |
 
 Table: **Francia 9** · **Noruega 6** · **Senegal 3 ✦** · Irak 0
 
-### Group J — Argentina, Argelia, Austria ✦
+### Group J — Argentina, Austria
 | Match | Score |
 |---|:-:|
 | Argentina – Argelia | **1-0** |
 | Austria – Jordania | **1-0** |
 | Argentina – Austria | **2-0** |
-| Jordania – Argelia | **1-2** |
-| Argelia – Austria | **2-1** |
+| Jordania – Argelia | **0-2** |
+| Argelia – Austria | **0-1** |
 | Jordania – Argentina | **0-2** |
 
-Table: **Argentina 9** · **Argelia 6** · **Austria 3 ✦** · Jordania 0
+Table: **Argentina 9** · **Austria 6** · Argelia 3 · Jordania 0
 
-### Group K — Colombia, Portugal
+### Group K — Portugal, Colombia, RD Congo ✦
 | Match | Score |
 |---|:-:|
 | Portugal – RD Congo | **1-0** |
-| Uzbekistán – Colombia | **0-1** |
-| Portugal – Uzbekistán | **1-0** |
+| Uzbekistán – Colombia | **0-2** |
+| Portugal – Uzbekistán | **2-0** |
 | Colombia – RD Congo | **2-0** |
-| Colombia – Portugal | **2-1** |
-| RD Congo – Uzbekistán | **0-1** |
+| Colombia – Portugal | **0-1** |
+| RD Congo – Uzbekistán | **2-1** |
 
-Table: **Colombia 9** · **Portugal 6** · Uzbekistán 3 · RD Congo 0
+Table: **Portugal 9** · **Colombia 6** · **RD Congo 3 ✦** · Uzbekistán 0
 
 ### Group L — Inglaterra, Croacia, Panamá ✦
 | Match | Score |
@@ -321,7 +397,7 @@ Table: **Colombia 9** · **Portugal 6** · Uzbekistán 3 · RD Congo 0
 | Inglaterra – Croacia | **1-0** |
 | Ghana – Panamá | **0-1** |
 | Inglaterra – Ghana | **2-0** |
-| Panamá – Croacia | **1-2** |
+| Panamá – Croacia | **0-2** |
 | Panamá – Inglaterra | **0-2** |
 | Croacia – Ghana | **2-0** |
 
@@ -331,38 +407,38 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 
 ### Dieciseisavos
 
-- 2026-06-28 · Corea del Sur **0-1** Suiza → **Suiza** (23%/27%/51%)
+- 2026-06-28 · Corea del Sur **0-1** Canadá → **Canadá** (21%/30%/49%)
 - 2026-06-29 · Alemania **2-0** Rep. Checa → **Alemania** (60%/23%/17%)
 - 2026-06-29 · Países Bajos **0-1** Marruecos → **Marruecos** (34%/30%/35%)
 - 2026-06-29 · Brasil **1-0** Japón → **Brasil** (46%/28%/26%)
-- 2026-06-30 · Francia **2-0** Escocia → **Francia** (64%/22%/14%)
+- 2026-06-30 · Francia **1-0** Paraguay → **Francia** (55%/27%/18%)
 - 2026-06-30 · Ecuador **1-0** Noruega → **Ecuador** (36%/31%/33%)
 - 2026-06-30 · México **1-0** Costa de Marfil → **México** (59%/27%/15%)
-- 2026-07-01 · Inglaterra **1-0** Uzbekistán → **Inglaterra** (62%/25%/13%)
-- 2026-07-01 · Turquía **1-0** Senegal → **Turquía** (37%/29%/34%)
-- 2026-07-01 · Bélgica **1-0** Austria → **Bélgica** (48%/27%/25%)
-- 2026-07-02 · Portugal **1-0** Croacia → **Portugal** (47%/28%/25%)
-- 2026-07-02 · España **1-0** Argelia → **España** (61%/24%/16%)
-- 2026-07-02 · Canadá **1-0** Egipto → **Canadá** (53%/30%/17%)
+- 2026-07-01 · Inglaterra **1-0** RD Congo → **Inglaterra** (66%/24%/11%)
+- 2026-07-01 · EEUU **2-0** Bosnia y Her. → **EEUU** (68%/20%/11%)
+- 2026-07-01 · Bélgica **1-0** Senegal → **Bélgica** (45%/28%/27%)
+- 2026-07-02 · Colombia **1-0** Croacia → **Colombia** (51%/27%/23%)
+- 2026-07-02 · España **2-0** Austria → **España** (65%/23%/13%)
+- 2026-07-02 · Suiza **2-0** Suecia → **Suiza** (67%/20%/13%)
 - 2026-07-03 · Argentina **1-0** Uruguay → **Argentina** (56%/27%/17%)
-- 2026-07-03 · Colombia **1-0** Australia → **Colombia** (52%/27%/21%)
-- 2026-07-03 · EEUU **0-1** Irán → **Irán** (36%/28%/36%)
+- 2026-07-03 · Portugal **1-0** Argelia → **Portugal** (47%/28%/25%)
+- 2026-07-03 · Turquía **1-0** Egipto → **Turquía** (49%/29%/23%)
 ### Octavos
 
 - 2026-07-04 · Alemania **0-1** Francia → **Francia** (25%/27%/48%)
-- 2026-07-04 · Suiza **0-1** Marruecos → **Marruecos** (34%/30%/36%)
+- 2026-07-04 · Canadá **1-0** Marruecos → **Canadá** (34%/33%/33%)
 - 2026-07-05 · Brasil **1-0** Ecuador → **Brasil** (44%/30%/27%)
 - 2026-07-05 · México **0-1** Inglaterra → **Inglaterra** (33%/32%/36%)
-- 2026-07-06 · Portugal **0-1** España → **España** (22%/27%/51%)
-- 2026-07-06 · Turquía **1-2** Bélgica → **Bélgica** (29%/26%/44%)
-- 2026-07-07 · Argentina **1-0** Irán → **Argentina** (60%/24%/15%)
-- 2026-07-07 · Canadá **0-1** Colombia → **Colombia** (28%/31%/40%)
+- 2026-07-06 · Colombia **0-1** España → **España** (25%/27%/48%)
+- 2026-07-06 · EEUU **1-2** Bélgica → **Bélgica** (29%/26%/45%)
+- 2026-07-07 · Argentina **2-0** Turquía → **Argentina** (62%/23%/15%)
+- 2026-07-07 · Suiza **0-1** Portugal → **Portugal** (30%/28%/42%)
 ### Cuartos
 
-- 2026-07-09 · Francia **1-0** Marruecos → **Francia** (45%/29%/26%)
+- 2026-07-09 · Francia **1-0** Canadá → **Francia** (43%/31%/26%)
 - 2026-07-10 · España **2-0** Bélgica → **España** (57%/24%/19%)
 - 2026-07-11 · Brasil **0-1** Inglaterra → **Inglaterra** (35%/29%/36%)
-- 2026-07-11 · Argentina **1-0** Colombia → **Argentina** (46%/28%/26%)
+- 2026-07-11 · Argentina **1-0** Portugal → **Argentina** (49%/27%/23%)
 ### Semifinales
 
 - 2026-07-14 · Francia **0-1** España → **España** (27%/28%/45%)
@@ -375,24 +451,24 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 - 2026-07-19 · España **1-0** Argentina → **España** (37%/29%/34%)
 
 
-### 🏆 PREDICTED CHAMPION: **España** (16.4%)
+### 🏆 PREDICTED CHAMPION: **España** (16.1%)
 
 ## Title probabilities (50,000 Monte Carlo simulations)
 
 | Team | Reach R16 | Quarters | Semis | Final | **CHAMPION** |
 |---|:-:|:-:|:-:|:-:|:-:|
-| España | 70% | 50% | 37% | 25% | **16.4%** |
-| Argentina | 66% | 50% | 34% | 22% | **13.9%** |
-| Francia | 67% | 44% | 27% | 15% | **8.4%** |
-| Brasil | 64% | 41% | 24% | 13% | **7.1%** |
-| Inglaterra | 66% | 38% | 23% | 13% | **6.8%** |
-| México | 67% | 39% | 22% | 11% | **5.9%** |
-| Colombia | 64% | 37% | 21% | 12% | **5.8%** |
-| Portugal | 58% | 31% | 17% | 9% | **4.1%** |
-| Canadá | 63% | 32% | 16% | 7% | **3.2%** |
-| Suiza | 62% | 31% | 14% | 6% | **2.7%** |
-| Ecuador | 55% | 28% | 14% | 6% | **2.7%** |
-| Bélgica | 56% | 30% | 13% | 6% | **2.6%** |
+| España | 70% | 50% | 37% | 25% | **16.1%** |
+| Argentina | 66% | 50% | 34% | 22% | **14.1%** |
+| Francia | 69% | 45% | 28% | 15% | **8.7%** |
+| Brasil | 66% | 41% | 24% | 13% | **7.0%** |
+| Inglaterra | 66% | 39% | 23% | 13% | **6.9%** |
+| Colombia | 64% | 36% | 21% | 12% | **6.0%** |
+| México | 66% | 38% | 22% | 11% | **5.6%** |
+| Portugal | 63% | 34% | 18% | 9% | **4.5%** |
+| Canadá | 60% | 31% | 15% | 7% | **3.1%** |
+| Bélgica | 60% | 33% | 13% | 6% | **2.7%** |
+| Marruecos | 51% | 28% | 14% | 6% | **2.7%** |
+| Ecuador | 55% | 27% | 13% | 6% | **2.6%** |
 
 ---
 
@@ -405,85 +481,86 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 | 11/06 | A | México – Sudáfrica | 2-0 | 2-0 | ✅ 5 |
 | 11/06 | A | Corea del Sur – Rep. Checa | 1-0 | 2-1 | ✅ 3 |
 | 12/06 | B | Canadá – Bosnia y Her. | 2-0 | 1-1 | ❌ 0 |
-| 12/06 | D | EEUU – Paraguay | 1-1 | 4-1 | ❌ 0 |
-| 13/06 | B | Catar – Suiza | 0-2 | 1-1 | ❌ 0 |
+| 12/06 | D | EEUU – Paraguay | 1-0 | 4-1 | ✅ 3 |
+| 13/06 | B | Catar – Suiza | 0-3 | 1-1 | ❌ 0 |
 | 13/06 | C | Brasil – Marruecos | 1-0 | 1-1 | ❌ 0 |
 | 13/06 | C | Haití – Escocia | 0-1 | 0-2 | ✅ 3 |
-| 14/06 | D | Australia – Turquía | 1-1 | 2-0 | ❌ 0 |
+| 14/06 | D | Australia – Turquía | 0-1 | 2-0 | ❌ 0 |
 | 14/06 | E | Alemania – Curazao | 2-0 | 7-1 | ✅ 3 |
-| 14/06 | F | Países Bajos – Japón | 1-1 | 2-2 | ✅ 3 |
+| 14/06 | F | Países Bajos – Japón | 1-0 | 2-2 | ❌ 0 |
 | 14/06 | E | Costa de Marfil – Ecuador | 0-1 | 1-0 | ❌ 0 |
-| 14/06 | F | Suecia – Túnez | 1-1 | 5-1 | ❌ 0 |
-| 15/06 | H | España – Cabo Verde | 2-0 | 0-0 | ❌ 0 |
+| 14/06 | F | Suecia – Túnez | 1-0 | 5-1 | ✅ 3 |
+| 15/06 | H | España – Cabo Verde | 3-0 | 0-0 | ❌ 0 |
 | 15/06 | G | Bélgica – Egipto | 1-0 | 1-1 | ❌ 0 |
 | 15/06 | H | Arabia S. – Uruguay | 0-1 | 1-1 | ❌ 0 |
 | 15/06 | G | Irán – Nueva Zelanda | 1-0 | 2-2 | ❌ 0 |
 | 16/06 | I | Francia – Senegal | 1-0 | 3-1 | ✅ 3 |
 | 16/06 | I | Irak – Noruega | 0-2 | 1-4 | ✅ 3 |
-| 16/06 | J | Argentina – Argelia | 1-0 |   |   |
-| 17/06 | J | Austria – Jordania | 1-0 |   |   |
-| 17/06 | K | Portugal – RD Congo | 1-0 |   |   |
-| 17/06 | L | Inglaterra – Croacia | 1-0 |   |   |
-| 17/06 | L | Ghana – Panamá | 0-1 |   |   |
-| 17/06 | K | Uzbekistán – Colombia | 0-1 |   |   |
-| 18/06 | A | Rep. Checa – Sudáfrica | 2-1 |   |   |
-| 18/06 | B | Suiza – Bosnia y Her. | 2-0 |   |   |
-| 18/06 | B | Canadá – Catar | 2-0 |   |   |
+| 16/06 | J | Argentina – Argelia | 1-0 | 3-0 | ✅ 3 |
+| 17/06 | J | Austria – Jordania | 1-0 | 3-1 | ✅ 3 |
+| 17/06 | K | Portugal – RD Congo | 1-0 | 1-1 | ❌ 0 |
+| 17/06 | L | Inglaterra – Croacia | 1-0 | 4-2 | ✅ 3 |
+| 17/06 | L | Ghana – Panamá | 0-1 | 1-0 | ❌ 0 |
+| 17/06 | K | Uzbekistán – Colombia | 0-2 | 1-3 | ✅ 3 |
+| 18/06 | A | Rep. Checa – Sudáfrica | 1-0 | 1-1 | ❌ 0 |
+| 18/06 | B | Suiza – Bosnia y Her. | 2-0 | 4-1 | ✅ 3 |
+| 18/06 | B | Canadá – Catar | 2-0 | 6-0 | ✅ 3 |
 | 18/06 | A | México – Corea del Sur | 1-0 |   |   |
-| 19/06 | D | EEUU – Australia | 1-1 |   |   |
+| 19/06 | D | EEUU – Australia | 2-1 |   |   |
 | 19/06 | C | Escocia – Marruecos | 0-1 |   |   |
-| 19/06 | C | Brasil – Haití | 2-0 |   |   |
+| 19/06 | C | Brasil – Haití | 3-0 |   |   |
 | 19/06 | D | Turquía – Paraguay | 1-0 |   |   |
 | 20/06 | F | Países Bajos – Suecia | 2-0 |   |   |
-| 20/06 | E | Alemania – Costa de Marfil | 1-0 |   |   |
-| 20/06 | E | Ecuador – Curazao | 2-0 |   |   |
+| 20/06 | E | Alemania – Costa de Marfil | 2-0 |   |   |
+| 20/06 | E | Ecuador – Curazao | 3-0 |   |   |
 | 21/06 | F | Túnez – Japón | 0-1 |   |   |
-| 21/06 | H | España – Arabia S. | 2-0 |   |   |
-| 21/06 | G | Bélgica – Irán | 2-1 |   |   |
-| 21/06 | H | Uruguay – Cabo Verde | 2-0 |   |   |
+| 21/06 | H | España – Arabia S. | 3-0 |   |   |
+| 21/06 | G | Bélgica – Irán | 2-0 |   |   |
+| 21/06 | H | Uruguay – Cabo Verde | 1-0 |   |   |
 | 21/06 | G | Nueva Zelanda – Egipto | 0-1 |   |   |
 | 22/06 | J | Argentina – Austria | 2-0 |   |   |
-| 22/06 | I | Francia – Irak | 2-0 |   |   |
+| 22/06 | I | Francia – Irak | 3-0 |   |   |
 | 22/06 | I | Noruega – Senegal | 1-0 |   |   |
-| 22/06 | J | Jordania – Argelia | 1-2 |   |   |
-| 23/06 | K | Portugal – Uzbekistán | 1-0 |   |   |
+| 22/06 | J | Jordania – Argelia | 0-2 |   |   |
+| 23/06 | K | Portugal – Uzbekistán | 2-0 |   |   |
 | 23/06 | L | Inglaterra – Ghana | 2-0 |   |   |
-| 23/06 | L | Panamá – Croacia | 1-2 |   |   |
+| 23/06 | L | Panamá – Croacia | 0-2 |   |   |
 | 23/06 | K | Colombia – RD Congo | 2-0 |   |   |
-| 24/06 | B | Suiza – Canadá | 0-1 |   |   |
-| 24/06 | B | Bosnia y Her. – Catar | 2-1 |   |   |
-| 24/06 | C | Escocia – Brasil | 1-2 |   |   |
+| 24/06 | B | Suiza – Canadá | 1-0 |   |   |
+| 24/06 | B | Bosnia y Her. – Catar | 2-0 |   |   |
+| 24/06 | C | Escocia – Brasil | 0-2 |   |   |
 | 24/06 | C | Marruecos – Haití | 2-0 |   |   |
-| 24/06 | A | Rep. Checa – México | 0-2 |   |   |
+| 24/06 | A | Rep. Checa – México | 0-1 |   |   |
 | 24/06 | A | Sudáfrica – Corea del Sur | 0-2 |   |   |
 | 25/06 | E | Curazao – Costa de Marfil | 0-2 |   |   |
-| 25/06 | E | Ecuador – Alemania | 1-1 |   |   |
-| 25/06 | F | Japón – Suecia | 2-0 |   |   |
+| 25/06 | E | Ecuador – Alemania | 0-1 |   |   |
+| 25/06 | F | Japón – Suecia | 2-1 |   |   |
 | 25/06 | F | Túnez – Países Bajos | 0-2 |   |   |
-| 25/06 | D | Turquía – EEUU | 1-1 |   |   |
-| 25/06 | D | Paraguay – Australia | 1-1 |   |   |
+| 25/06 | D | Turquía – EEUU | 1-2 |   |   |
+| 25/06 | D | Paraguay – Australia | 1-0 |   |   |
 | 26/06 | I | Noruega – Francia | 1-2 |   |   |
 | 26/06 | I | Senegal – Irak | 2-0 |   |   |
 | 26/06 | H | Cabo Verde – Arabia S. | 1-2 |   |   |
 | 26/06 | H | Uruguay – España | 0-1 |   |   |
-| 26/06 | G | Egipto – Irán | 0-1 |   |   |
+| 26/06 | G | Egipto – Irán | 1-0 |   |   |
 | 26/06 | G | Nueva Zelanda – Bélgica | 0-2 |   |   |
 | 27/06 | L | Panamá – Inglaterra | 0-2 |   |   |
 | 27/06 | L | Croacia – Ghana | 2-0 |   |   |
-| 27/06 | K | Colombia – Portugal | 2-1 |   |   |
-| 27/06 | K | RD Congo – Uzbekistán | 0-1 |   |   |
-| 27/06 | J | Argelia – Austria | 2-1 |   |   |
+| 27/06 | K | Colombia – Portugal | 0-1 |   |   |
+| 27/06 | K | RD Congo – Uzbekistán | 2-1 |   |   |
+| 27/06 | J | Argelia – Austria | 0-1 |   |   |
 | 27/06 | J | Jordania – Argentina | 0-2 |   |   |
 
-**Running total: 23 pts** · exact scores: 1/18 · outcomes (≥3pts): 7/18 · played: 18/72
+**Running total: 44 pts** · exact scores: 1/27 · outcomes (≥3pts): 14/27 · played: 27/72
 
 ---
 
 ## ⚠️ Notes & limitations
 
 - The "most likely path" bracket is the modal outcome of each match in sequence — the *probability of this exact bracket happening is tiny* (that's football). The Monte Carlo probabilities are the honest forecast.
-- xG features are ELO-derived proxies (no public xG provider for all 48 national teams); squad market value, caps and injuries are neutralised in historical-training mode because they don't exist retroactively. **Bookmaker odds** would be the highest-ROI upgrade but no free national-team odds source exists (see backtest section).
-- Model upgrades that were *measured and kept*: pi-ratings (attack/defence), 3-year decay, and **competitive-form** (form in non-friendly matches) — together RPS 0.2009 → **0.1971**. Upgrades *measured and rejected* (no RPS gain): momentum, form-10, form-variance, stacking, FIFA ranking, Optuna-tuned hyper-params (half-life is flat 1.5–8 yr).
-- To re-predict mid-tournament with played matches locked in: refresh the results dataset and run with `--cutoff none`. Log real results into the scorecard with `scripts/update_scorecard.py`.
+- xG features are ELO-derived proxies (no public xG provider for all 48 national teams); squad market value, caps and injuries are neutralised in historical-training mode because they don't exist retroactively.
+- **Market blend** (`--alpha`): the production forecast now folds live bookmaker 1X2 odds into the upcoming matches (log-linear pool, then λ re-solved so the Monte Carlo still samples scorelines). This is the one real accuracy lever beyond team strength. Pure-model and pure-market are reproducible with `--alpha 1.0` / `--alpha 0.0`.
+- **pi-ratings (attack/defence)**, **3-year decay** and **form_competitive_diff** improved the leak-free backtest (RPS 0.2009 → 0.1971); the **stacking ensemble** is reported but measured worse, so it does not drive scorelines.
+- To re-predict mid-tournament with played matches locked in: refresh the results dataset and run with `--cutoff none`.
 
-*Built with scikit-learn, XGBoost, Optuna, pandas and 50,000 parallel universes.* 🎲
+*Built with scikit-learn, XGBoost, pandas, Optuna and 50,000 parallel universes.* 🎲
