@@ -30,6 +30,13 @@ MAX_GOALS = 9          # truncamiento de la matriz de marcadores
 DC_RHO = -0.08         # corrección Dixon-Coles para 0-0/1-1 (nota #4)
 LAMBDA_JITTER = 0.10   # sigma del ruido lognormal por partido/iteración
 
+# Temperatura de calibración aplicada a las lambdas ANTES de alimentar el
+# Monte Carlo: lam' = mean * (lam/mean)^T. T<1 comprime hacia la media
+# (menos sobreconfianza), T>1 la acentúa. El backtest multi-Mundial mostró
+# que el modelo ya está bien calibrado (temperature scaling óptimo en T=1.0),
+# así que el default es 1.0 = identidad; queda expuesto para re-calibrar.
+LAMBDA_TEMPERATURE = 1.0
+
 # Multiplicadores de incentivo (Categoría 4 del diccionario)
 ROTATION_ATTACK = 0.88     # clasificado con 6 pts rota: ataca menos
 ROTATION_CONCEDE = 1.08    # ...y concede más
@@ -66,17 +73,88 @@ def _sample_score(matrix: np.ndarray, rng: np.random.Generator) -> tuple[int, in
     return divmod(flat, matrix.shape[1])
 
 
-def _modal_score_given_result(tally: "_MatchTally",
-                              result: str) -> tuple[tuple[int, int], int]:
-    """Marcador más frecuente entre las simulaciones con ese 1X2."""
-    if result == "1":
-        ok = lambda s: s[0] > s[1]
-    elif result == "2":
-        ok = lambda s: s[0] < s[1]
-    else:
-        ok = lambda s: s[0] == s[1]
-    candidates = [(s, c) for s, c in tally.scores.items() if ok(s)]
-    return max(candidates, key=lambda x: x[1])
+# ----------------------------- blend con mercado -----------------------------
+def _demargin(odds_home: float, odds_draw: float,
+              odds_away: float) -> tuple[float, float, float]:
+    """Odds decimales -> probabilidades implícitas SIN margen (overround).
+    prob = (1/odd) normalizado para que sumen 1 (método proporcional)."""
+    imp = np.array([1.0 / odds_home, 1.0 / odds_draw, 1.0 / odds_away])
+    return tuple(imp / imp.sum())
+
+
+def blend_with_market(model_probs: pd.DataFrame, odds_csv, alpha: float = 0.3
+                      ) -> pd.DataFrame:
+    """Mezcla las probabilidades 1X2 del modelo con las del mercado.
+
+    `model_probs`: DataFrame con columnas home_team, away_team, p_home,
+    p_draw, p_away (1X2 del modelo, p.ej. derivadas de la matriz Dixon-Coles).
+    `odds_csv`: ruta o DataFrame con home_team, away_team, odds_home,
+    odds_draw, odds_away (odds decimales del mercado).
+    `alpha`: PESO DEL MODELO. alpha=1.0 -> solo modelo, 0.0 -> solo mercado,
+    0.5 -> mitad y mitad. El blend es un *log-linear opinion pool* (media
+    geométrica ponderada renormalizada), el equivalente multiclase de mezclar
+    en log-odds: p ∝ p_modelo^alpha · p_mercado^(1-alpha).
+
+    Devuelve una copia de `model_probs` con p_home/p_draw/p_away mezcladas y
+    una columna `blended` (True donde había odds del mercado)."""
+    odds = pd.read_csv(odds_csv) if isinstance(odds_csv, (str, bytes)) else odds_csv
+    out = model_probs.copy().reset_index(drop=True)
+    out["blended"] = False
+    if odds is None or len(odds) == 0:
+        return out
+    key = {(r.home_team, r.away_team): r for r in odds.itertuples()}
+    eps = 1e-9
+    for i, m in out.iterrows():
+        row = key.get((m["home_team"], m["away_team"]))
+        if row is None:
+            continue
+        try:
+            mh, md, ma = _demargin(float(row.odds_home), float(row.odds_draw),
+                                   float(row.odds_away))
+        except (ValueError, ZeroDivisionError, TypeError):
+            continue
+        if not np.isfinite([mh, md, ma]).all():
+            continue
+        pm = np.array([m["p_home"], m["p_draw"], m["p_away"]], float)
+        pk = np.array([mh, md, ma], float)
+        blended = (np.maximum(pm, eps) ** alpha) * (np.maximum(pk, eps) ** (1 - alpha))
+        blended /= blended.sum()
+        out.at[i, "p_home"], out.at[i, "p_draw"], out.at[i, "p_away"] = blended
+        out.at[i, "blended"] = True
+    return out
+
+
+def lambdas_from_1x2(p1: float, pX: float, p2: float,
+                     init: tuple[float, float] = (1.3, 1.1),
+                     rho: float = DC_RHO) -> tuple[float, float]:
+    """Resuelve (lam_a, lam_b) cuya matriz Dixon-Coles reproduce el 1X2 dado.
+    El MC necesita λ para samplear marcadores; tras mezclar con el mercado en
+    el espacio de probabilidades, re-derivamos las λ que las generan."""
+    from scipy.optimize import minimize
+    target = np.array([p1, pX, p2])
+
+    def loss(z):
+        la, lb = np.exp(z)            # exp -> λ siempre positivas
+        m = _dixon_coles_matrix(min(la, 6.0), min(lb, 6.0), rho)
+        pred = np.array([np.tril(m, -1).sum(), np.trace(m), np.triu(m, 1).sum()])
+        return float(np.sum((pred - target) ** 2))
+
+    res = minimize(loss, np.log(np.array(init)), method="Nelder-Mead",
+                   options={"xatol": 1e-4, "fatol": 1e-10, "maxiter": 400})
+    la, lb = np.exp(res.x)
+    return float(np.clip(la, 0.15, 4.5)), float(np.clip(lb, 0.15, 4.5))
+
+
+def dc_1x2(lam_a: float, lam_b: float, rho: float = DC_RHO
+           ) -> tuple[float, float, float]:
+    """Probabilidades 1X2 ANALÍTICAS derivadas directamente de la matriz
+    Dixon-Coles (no muestreadas): P(1) = suma del triángulo inferior,
+    P(X) = traza (todos los empates 0-0,1-1,...), P(2) = triángulo superior.
+    Es la forma correcta de obtener P(empate) — sumando la diagonal de la
+    matriz de marcadores — en vez de cualquier heurística."""
+    m = _dixon_coles_matrix(lam_a, lam_b, rho)
+    return (float(np.tril(m, -1).sum()), float(np.trace(m)),
+            float(np.triu(m, 1).sum()))
 
 
 @dataclass
@@ -116,6 +194,8 @@ class _MatchTally:
 class GroupStageSimulator:
     def __init__(self, teams: pd.DataFrame, fixtures: pd.DataFrame, model,
                  rho: float = DC_RHO, lambda_jitter: float = LAMBDA_JITTER,
+                 calibration_temp: float = LAMBDA_TEMPERATURE,
+                 odds_csv=None, blend_alpha: float = 1.0,
                  played_results: pd.DataFrame | None = None,
                  seed: int = 42):
         """teams: TEAM_COLUMNS, una fila por equipo.
@@ -126,6 +206,10 @@ class GroupStageSimulator:
         self.model = model
         self.rho = rho
         self.lambda_jitter = lambda_jitter
+        self.calibration_temp = calibration_temp
+        self.odds_csv = odds_csv
+        self.blend_alpha = blend_alpha
+        self.n_blended = 0
         self.rng = np.random.default_rng(seed)
         self._idx = {t: i for i, t in enumerate(self.teams["team"])}
 
@@ -140,7 +224,32 @@ class GroupStageSimulator:
             if len(names) != 4:
                 raise ValueError(f"El grupo {g} tiene {len(names)} equipos")
         self._lambdas = self._precompute_lambdas()
+        if self.odds_csv is not None and self.blend_alpha < 1.0:
+            self._apply_market_blend()
         self._fixed = self._match_played(played_results)
+
+    def _apply_market_blend(self) -> None:
+        """Mezcla las λ del modelo con las odds del mercado: λ -> 1X2 (matriz
+        DC) -> blend log-lineal con el mercado (alpha=peso del modelo) -> re-
+        deriva λ' que reproducen el 1X2 mezclado. Solo afecta partidos que
+        están en el CSV de odds; el resto queda con las λ del modelo."""
+        rows = []
+        for i in range(len(self.fixtures)):
+            p1, pX, p2 = dc_1x2(self._lambdas[i, 0], self._lambdas[i, 1], self.rho)
+            fx = self.fixtures.iloc[i]
+            rows.append({"home_team": fx["team_a"], "away_team": fx["team_b"],
+                         "p_home": p1, "p_draw": pX, "p_away": p2})
+        model_probs = pd.DataFrame(rows)
+        blended = blend_with_market(model_probs, self.odds_csv, self.blend_alpha)
+        for i in range(len(self.fixtures)):
+            if not bool(blended.at[i, "blended"]):
+                continue
+            la, lb = lambdas_from_1x2(
+                float(blended.at[i, "p_home"]), float(blended.at[i, "p_draw"]),
+                float(blended.at[i, "p_away"]),
+                init=(self._lambdas[i, 0], self._lambdas[i, 1]), rho=self.rho)
+            self._lambdas[i] = (la, lb)
+            self.n_blended += 1
 
     def _match_played(self, played: pd.DataFrame | None) -> dict:
         """Mapea resultados jugados a índices del fixture (cualquier
@@ -185,8 +294,18 @@ class GroupStageSimulator:
             rd = float(rest_by_pos.loc[i])
             rows.append(build_match_features(a, b, fx.matchday, rd))
             rows.append(build_match_features(b, a, fx.matchday, -rd))
-        lams = self.model.predict_lambda(match_features_frame(rows))
+        lams = self._calibrate(self.model.predict_lambda(
+            match_features_frame(rows)))
         return lams.reshape(-1, 2)  # [n_fixtures, (lado_a, lado_b)]
+
+    def _calibrate(self, lams: np.ndarray) -> np.ndarray:
+        """Temperatura de calibración sobre las lambdas (T=1.0 = identidad).
+        lam' = mean * (lam/mean)^T — comprime/acentúa la dispersión sin mover
+        la media global de goles."""
+        if self.calibration_temp == 1.0:
+            return lams
+        mean = float(np.mean(lams))
+        return mean * (lams / mean) ** self.calibration_temp
 
     # ---------- incentivos fecha 3 ----------
     @staticmethod
@@ -246,7 +365,8 @@ class GroupStageSimulator:
                 rows.append(build_match_features(
                     self.teams.loc[i], self.teams.loc[j], 0))
                 idx.append((i, j))
-        lams = self.model.predict_lambda(match_features_frame(rows))
+        lams = self._calibrate(self.model.predict_lambda(
+            match_features_frame(rows)))
         out = np.full((n, n), np.nan)
         for (i, j), l in zip(idx, lams):
             out[i, j] = l
@@ -276,7 +396,7 @@ class GroupStageSimulator:
         return (ia, ib) if self.rng.random() < p_pen_a else (ib, ia)
 
     # ---------- torneo completo ----------
-    def run(self, n_sims: int = 10000, knockout: bool = False
+    def run(self, n_sims: int = 50000, knockout: bool = False
             ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Devuelve (tabla de clasificación, tabla de partidos).
 
@@ -406,38 +526,46 @@ class GroupStageSimulator:
         matches["p_win_a"] = [t.win_a / n_sims for t in tallies]
         matches["p_draw"] = [t.draw / n_sims for t in tallies]
         matches["p_win_b"] = [t.win_b / n_sims for t in tallies]
+        # Probabilidades 1X2 ANALÍTICAS de la matriz Dixon-Coles base (sin
+        # jitter ni incentivos): P(empate) sale de la diagonal, no de heurística.
+        dc = [dc_1x2(self._lambdas[i, 0], self._lambdas[i, 1], self.rho)
+              for i in range(len(self.fixtures))]
+        matches["p_win_a_dc"] = [round(p[0], 4) for p in dc]
+        matches["p_draw_dc"] = [round(p[1], 4) for p in dc]
+        matches["p_win_b_dc"] = [round(p[2], 4) for p in dc]
         matches["exp_goals_a"] = [t.goals_a / n_sims for t in tallies]
         matches["exp_goals_b"] = [t.goals_b / n_sims for t in tallies]
         most_likely = [t.scores.most_common(1)[0] for t in tallies]
         matches["most_likely_score"] = [f"{s[0][0]}-{s[0][1]}" for s in most_likely]
         matches["p_most_likely_score"] = [s[1] / n_sims for s in most_likely]
-        # resultado 1X2 más probable de cada partido
-        def _most_likely(t):
-            return ("1" if t.win_a >= max(t.draw, t.win_b)
-                    else ("X" if t.draw >= t.win_b else "2"))
-        # "Empate técnico": cuando ganar le es casi igual de probable a
-        # ambos lados (|P(1) - P(2)| <= DRAW_MARGIN_PP puntos porcentuales,
-        # medidos como se muestran en el reporte), el partido se marca como
-        # empate aunque haya un favorito leve. No aplica a partidos ya
-        # jugados (resultado real fijo).
-        DRAW_MARGIN_PP = 3
-        pred_result = []
-        for i, t in enumerate(tallies):
-            r = _most_likely(t)
-            if i not in self._fixed and r != "X":
-                diff_pp = abs(round(100 * t.win_a / n_sims)
-                              - round(100 * t.win_b / n_sims))
-                if diff_pp <= DRAW_MARGIN_PP:
-                    r = "X"
-            pred_result.append(r)
-        matches["pred_result"] = pred_result
-        # marcador pronosticado: el más frecuente CONDICIONADO al
-        # resultado 1X2 pronosticado (consistente para llenar la polla)
-        pred_scores = [
-            _modal_score_given_result(t, r)
-            for t, r in zip(tallies, matches["pred_result"])]
-        matches["pred_score"] = [f"{s[0]}-{s[1]}" for s, _ in pred_scores]
-        matches["p_pred_score"] = [c / n_sims for _, c in pred_scores]
+        # Marcador pronosticado: el que MAXIMIZA los puntos esperados de la
+        # polla. Si predices un marcador s con resultado r, ganas 5 si es
+        # exacto y 3 si solo aciertas el resultado, así que
+        #   E[pts] = 5·P(s) + 3·(P(r) − P(s)) = 3·P(r) + 2·P(s).
+        # Domina 3·P(r) -> el resultado (1X2) sale casi siempre el más
+        # probable; el 2·P(s) afina el marcador DENTRO de ese resultado.
+        # Mejor para la polla que redondear λ: recupera 1-0/2-0/0-0 reales.
+        # En partidos ya jugados scores tiene solo el marcador real -> lo elige.
+        def _best_score(t):
+            pr = {"1": t.win_a / n_sims, "X": t.draw / n_sims,
+                  "2": t.win_b / n_sims}
+            best, best_e = (0, 0, "X", 0), -1.0
+            for (a, b), c in t.scores.items():
+                r = "1" if a > b else ("2" if a < b else "X")
+                e = 3 * pr[r] + 2 * (c / n_sims)
+                if e > best_e:
+                    best, best_e = (a, b, r, c), e
+            return best
+        bests = [_best_score(t) for t in tallies]
+        matches["pred_score"] = [f"{a}-{b}" for a, b, _r, _c in bests]
+        matches["pred_result"] = [r for _a, _b, r, _c in bests]
+        matches["p_pred_score"] = [c / n_sims for _a, _b, _r, c in bests]
+        # Marcador alternativo por REDONDEO mitad-arriba de los goles esperados
+        # (1.5->2, 1.4->1...). No es producción (nunca da 0); se guarda para
+        # comparar contra el óptimo (ver README / scripts/microsim_groupstage).
+        matches["pred_score_round"] = [
+            f"{int(np.floor(t.goals_a / n_sims + 0.5))}-"
+            f"{int(np.floor(t.goals_b / n_sims + 0.5))}" for t in tallies]
         matches["status"] = ["JUGADO" if i in self._fixed else "pendiente"
                              for i in range(len(self.fixtures))]
         return standings, matches

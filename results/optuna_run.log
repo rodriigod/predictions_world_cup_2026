@@ -1,0 +1,22 @@
+[1] Construyendo dataset (cutoff 2026-06-01)...
+    27,996 partidos generales (no-Mundial) para tuning leak-free
+
+[2] Tuneando logistic (40 trials, TimeSeriesSplit)...
+    default RPS=0.1797  |  tuneado RPS=0.1742  -> MEJORA
+    best params: {'C': 99.48164341217733}
+
+[2] Tuneando xgb (40 trials, TimeSeriesSplit)...
+    default RPS=0.1963  |  tuneado RPS=0.1952  -> MEJORA
+    best params: {'n_estimators': 685, 'max_depth': 3, 'learning_rate': 0.013549893214181484, 'subsample': 0.8948643955037504, 'colsample_bytree': 0.936778532113158, 'min_child_weight': 1, 'reg_lambda': 0.006670440670810406}
+
+[3] half-life del decaimiento (grid leak-free)...
+    hl= 1.5: RPS=0.1646
+    hl= 2.0: RPS=0.1645
+    hl= 3.0: RPS=0.1645 (producción)
+    hl= 4.0: RPS=0.1645 <- best
+    hl= 6.0: RPS=0.1645
+    hl= 8.0: RPS=0.1645
+
+Guardado: /Users/rodrigojorqueradiaz/Desktop/predictions_world_cup_2026/results/optuna/best_params.json
+
+NOTA: si 'no mejora', los defaults actuales ya son óptimos en validación honesta (consistente con experimentos previos).

@@ -36,7 +36,21 @@ RESULTS_CSV = Path(__file__).resolve().parents[2] / "files/f0_raw/international_
 
 TRAIN_FROM = "1995-01-01"   # las filas de entrenamiento parten aquí
 WARMUP_FROM = "1980-01-01"  # el ELO/forma se calculan desde aquí
-DECAY_HALF_LIFE_YEARS = 8.0  # peso 0.5 a los ~5.5 años (exp decay /8)
+DECAY_HALF_LIFE_YEARS = 3.0  # peso 0.5 a los ~2 años (exp decay /3): prioriza
+#                              forma reciente sobre historial largo. El barrido
+#                              (experiment_elo.py) mostró que 3-30a es plano en
+#                              el RPS del backtest, pero 3a es la convención para
+#                              selecciones y no degrada, así que se adopta.
+
+# --- pi-ratings ofensivo/defensivo online (Constantinou & Fenton 2013) ---
+# Cada equipo lleva un rating de ATAQUE (att, +=marca más) y DEFENSA (dfn,
+# +=concede menos), actualizados partido a partido con el error de goles
+# esperados. Capturan ataque y defensa por separado, complementando al ELO
+# (que es un escalar de fuerza total).
+PI_MU = 0.30          # log de la media de goles de referencia (~1.35)
+PI_HOME = 0.20        # bonus ofensivo de localía en escala log
+PI_LR = 0.06          # tasa de aprendizaje del update online
+PI_CLIP = 1.2         # cota de los ratings para evitar divergencia
 
 # Nombre en español (polla) -> nombre del dataset
 NAME_MAP = {
@@ -91,14 +105,18 @@ def _goal_mult(diff: int) -> float:
 
 
 class _TeamHistory:
-    __slots__ = ("elo", "gf10", "ga10", "pts5", "last_date", "n_matches",
-                 "wc_matches_in")
+    __slots__ = ("elo", "att", "dfn", "gf10", "ga10", "pts5", "pts10",
+                 "ptsC5", "last_date", "n_matches", "wc_matches_in")
 
     def __init__(self):
         self.elo = 1500.0
+        self.att = 0.0                  # pi-rating ofensivo (log-goles)
+        self.dfn = 0.0                  # pi-rating defensivo (+ = concede menos)
         self.gf10: deque = deque(maxlen=10)
         self.ga10: deque = deque(maxlen=10)
         self.pts5: deque = deque(maxlen=5)
+        self.pts10: deque = deque(maxlen=10)    # forma/consistencia (cand.)
+        self.ptsC5: deque = deque(maxlen=5)     # forma en NO amistosos (cand.)
         self.last_date: pd.Timestamp | None = None
         self.n_matches = 0
         self.wc_matches_in: dict = {}   # año WC -> partidos jugados en él
@@ -110,10 +128,18 @@ def _neutral_series(name_es_or_team: str, h: "_TeamHistory",
     sin dato histórico en neutro."""
     return pd.Series({
         "elo": h.elo,
+        "pi_attack": h.att,
+        "pi_defense": h.dfn,
         "xg_for_last10": float(np.mean(h.gf10)) if h.gf10 else 1.25,
         "xg_against_last10": float(np.mean(h.ga10)) if h.ga10 else 1.25,
         "form_last5_points_pct": (float(np.mean(h.pts5)) / 3.0
                                   if h.pts5 else 0.5),
+        "form_last10_points_pct": (float(np.mean(h.pts10)) / 3.0
+                                   if h.pts10 else 0.5),
+        "form_std10": (float(np.std(h.pts10)) / 3.0
+                       if len(h.pts10) >= 3 else 0.0),
+        "form_comp5_points_pct": (float(np.mean(h.ptsC5)) / 3.0
+                                  if h.ptsC5 else 0.5),
         "market_value_meur": 1.0,            # log(1)=0 -> neutro
         "avg_caps": 0.0,
         "players_with_wc_experience": 0.0,
@@ -132,7 +158,8 @@ def load_results() -> pd.DataFrame:
 def build_historical_dataset(cutoff: str | None = None, *,
                              home_adv_elo: float = 100.0,
                              k_mult: float = 1.0,
-                             half_life: float = DECAY_HALF_LIFE_YEARS) -> dict:
+                             half_life: float = DECAY_HALF_LIFE_YEARS,
+                             feature_names: list[str] | None = None) -> dict:
     """Recorre la historia una sola vez y devuelve:
 
     - X, y, w           : filas equipo-partido para el modelo de Poisson
@@ -147,6 +174,7 @@ def build_historical_dataset(cutoff: str | None = None, *,
     `home_adv_elo`, `k_mult`, `half_life`: hiperparámetros del ELO/decaimiento
     (defaults = los de producción), expuestos para tuneo leak-free.
     """
+    cols = feature_names if feature_names is not None else FEATURE_NAMES
     df = load_results()
     if cutoff is not None:
         df = df[df["date"] < pd.Timestamp(cutoff)].reset_index(drop=True)
@@ -215,10 +243,26 @@ def build_historical_dataset(cutoff: str | None = None, *,
         score_a = 1.0 if gh > ga_ else (0.5 if gh == ga_ else 0.0)
         delta = k * (score_a - we_a)
         ha.elo += delta; hb.elo -= delta
+
+        # ---- update online de pi-ratings ataque/defensa ----
+        # goles esperados con los ratings ACTUALES (pre-update); el error
+        # respecto al marcado real ajusta ataque propio y defensa rival.
+        pi_home = 0.0 if r.neutral else PI_HOME
+        pred_a = min(np.exp(PI_MU + ha.att - hb.dfn + pi_home), 6.0)
+        pred_b = min(np.exp(PI_MU + hb.att - ha.dfn), 6.0)
+        err_a, err_b = gh - pred_a, ga_ - pred_b
+        ha.att = float(np.clip(ha.att + PI_LR * err_a, -PI_CLIP, PI_CLIP))
+        hb.dfn = float(np.clip(hb.dfn - PI_LR * err_a, -PI_CLIP, PI_CLIP))
+        hb.att = float(np.clip(hb.att + PI_LR * err_b, -PI_CLIP, PI_CLIP))
+        ha.dfn = float(np.clip(ha.dfn - PI_LR * err_b, -PI_CLIP, PI_CLIP))
         ha.gf10.append(gh); ha.ga10.append(ga_)
         hb.gf10.append(ga_); hb.ga10.append(gh)
-        ha.pts5.append(3 if gh > ga_ else (1 if gh == ga_ else 0))
-        hb.pts5.append(3 if ga_ > gh else (1 if gh == ga_ else 0))
+        pa_pts = 3 if gh > ga_ else (1 if gh == ga_ else 0)
+        pb_pts = 3 if ga_ > gh else (1 if gh == ga_ else 0)
+        ha.pts5.append(pa_pts); hb.pts5.append(pb_pts)
+        ha.pts10.append(pa_pts); hb.pts10.append(pb_pts)
+        if r.tournament.lower() != "friendly":        # forma competitiva
+            ha.ptsC5.append(pa_pts); hb.ptsC5.append(pb_pts)
         ha.last_date = r.date; hb.last_date = r.date
         ha.n_matches += 1; hb.n_matches += 1
         if is_wc:
@@ -227,12 +271,12 @@ def build_historical_dataset(cutoff: str | None = None, *,
             hb.wc_matches_in[year] = hb.wc_matches_in.get(year, 0) + 1
 
     return {
-        "X": pd.DataFrame(rows, columns=FEATURE_NAMES),
+        "X": pd.DataFrame(rows, columns=cols),
         "y": pd.Series(goals, name="goals_scored"),
         "w": np.array(weights),
         "row_dates": pd.Series(row_dates, name="date"),
-        "X_match": pd.DataFrame(m_rows, columns=FEATURE_NAMES),
-        "X_match_away": pd.DataFrame(m_rows_b, columns=FEATURE_NAMES),
+        "X_match": pd.DataFrame(m_rows, columns=cols),
+        "X_match_away": pd.DataFrame(m_rows_b, columns=cols),
         "y_result": pd.Series(m_labels, name="result_1x2"),
         "w_match": np.array(m_weights),
         "match_dates": pd.Series(m_dates, name="date"),
