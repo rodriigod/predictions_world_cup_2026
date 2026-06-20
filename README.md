@@ -515,8 +515,8 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 | 18/06 | A | México – Corea del Sur | 1-0 | 1-0 | ✅ 5 |
 | 19/06 | D | EEUU – Australia | 2-1 | 2-0 | ✅ 3 |
 | 19/06 | C | Escocia – Marruecos | 0-1 | 0-1 | ✅ 5 |
-| 19/06 | C | Brasil – Haití | 3-0 |   |   |
-| 19/06 | D | Turquía – Paraguay | 1-0 |   |   |
+| 19/06 | C | Brasil – Haití | 3-0 | 3-0 | ✅ 5 |
+| 19/06 | D | Turquía – Paraguay | 1-0 | 0-1 | ❌ 0 |
 | 20/06 | F | Países Bajos – Suecia | 2-0 |   |   |
 | 20/06 | E | Alemania – Costa de Marfil | 2-0 |   |   |
 | 20/06 | E | Ecuador – Curazao | 3-0 |   |   |
