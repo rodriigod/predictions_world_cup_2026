@@ -36,7 +36,7 @@ Predicho = marcador del modelo · Real = resultado verdadero · Puntos: **5** ma
 | 19/06 | C | Escocia – Marruecos | 0-1 | 0-1 | ✅ 5 |
 | 19/06 | C | Brasil – Haití | 3-0 | 3-0 | ✅ 5 |
 | 19/06 | D | Turquía – Paraguay | 1-0 | 0-1 | ❌ 0 |
-| 20/06 | F | Países Bajos – Suecia | 2-0 | — | — |
+| 20/06 | F | Países Bajos – Suecia | 2-0 | 5-1 | ✅ 3 |
 | 20/06 | E | Alemania – Costa de Marfil | 2-0 | — | — |
 | 20/06 | E | Ecuador – Curazao | 3-0 | — | — |
 | 21/06 | F | Túnez – Japón | 0-1 | — | — |
@@ -77,4 +77,4 @@ Predicho = marcador del modelo · Real = resultado verdadero · Puntos: **5** ma
 | 27/06 | J | Argelia – Austria | 0-1 | — | — |
 | 27/06 | J | Jordania – Argentina | 0-2 | — | — |
 
-**Total: 64 pts** en 32 jugados · marcador exacto: 5/32 · resultado acertado: 18/32 (56%) · faltan: 40/72
+**Total: 67 pts** en 33 jugados · marcador exacto: 5/33 · resultado acertado: 19/33 (58%) · faltan: 39/72

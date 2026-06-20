@@ -140,8 +140,11 @@ python scripts/fetch_odds_2026.py            # writes a template to fill by hand
 python scripts/run_groups_simulation.py --sims 50000 --alpha 0.3   # 0.3·model + 0.7·market
 
 # OPTIONAL — free "scout" layer: DuckDuckGo fetches per-team form/injury news (NO key),
-# a local Qwen (LM Studio :1234) proposes a bounded ±0.08 adjustment → results/reports/dossier.md
-python scripts/match_dossier.py --limit 8                       # DuckDuckGo + Qwen (default)
+# a local Qwen (LM Studio :1234) reads it → results/reports/dossier.md
+#   --llm-mode facts  (default): Qwen extracts discrete facts (player out, rotation) →
+#                     fixed λ multipliers (Beal et al. 2021); only acts above 0.75 confidence
+#   --llm-mode adjust          : Qwen proposes a free-form bounded ±0.08 nudge
+python scripts/match_dossier.py --limit 8                       # DuckDuckGo + Qwen facts (default)
 python scripts/match_dossier.py --search none --analyzer none   # model-only table (offline)
 # (--search gemini also works if you set GEMINI_API_KEY, but the free tier rate-limits)
 ```
@@ -250,7 +253,8 @@ A complete, honest record of the work — including the dead ends, because knowi
 
 ### 🎯 Odds-pipeline fine-tuning (Shin 1992 / power / log-consensus)
 - **Shin de-margining is now primary** in `blend_with_market` (`src/data/odds_tools.py`), replacing proportional normalization. Measured on 130k club matches with Bet365 odds: Shin RPS **0.20086** vs proportional 0.20098 vs power 0.20084 — a *real but tiny* gain (the market is already near-efficient); adopted because it's principled and never worse.
-- **Power method as cross-check:** if Shin and power disagree by >1pp on a match it's logged as an *unbalanced line — review manually* (~3.5% of club matches).
+- **Power method as cross-check:** if Shin and power disagree by >1pp on a match it's logged as an *unbalanced line — review manually* (~3.5% of club matches; lines are written to `results/flagged_odds.csv`). The real 2026 odds are liquid → none flagged.
+- **Dynamic α by confederation** (`--dynamic-alpha`, **experimental, OFF by default**): nudges the model weight up when a CONCACAF/CAF/AFC/OFC side meets a UEFA/CONMEBOL one (documented market eurocentrism), down for UEFA-vs-CONMEBOL. **Cannot be backtested** (no historical WC odds) and the confederation feature already measured neutral, so it stays opt-in and never enters production.
 - **Multi-book log-consensus** (`logit_consensus`) implemented and ready, but we only have one consensus line per match today, so it isn't validated — wire it when per-bookmaker odds (e.g. Pinnacle) exist.
 - **Auto-warning** in `validate_blend_alpha.py`: if the blend at the production α is worse than market-only it prints a *lower α* suggestion. It currently fires (blend@α=0.3 RPS 0.2015 > market 0.2010) — confirming Groll-Zeileis (EURO 2024): in tournaments the market beats the model, so **α belongs near 0**.
 
@@ -524,7 +528,7 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 | 19/06 | C | Escocia – Marruecos | 0-1 | 0-1 | ✅ 5 |
 | 19/06 | C | Brasil – Haití | 3-0 | 3-0 | ✅ 5 |
 | 19/06 | D | Turquía – Paraguay | 1-0 | 0-1 | ❌ 0 |
-| 20/06 | F | Países Bajos – Suecia | 2-0 |   |   |
+| 20/06 | F | Países Bajos – Suecia | 2-0 | 5-1 | ✅ 3 |
 | 20/06 | E | Alemania – Costa de Marfil | 2-0 |   |   |
 | 20/06 | E | Ecuador – Curazao | 3-0 |   |   |
 | 21/06 | F | Túnez – Japón | 0-1 |   |   |

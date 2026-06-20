@@ -32,6 +32,8 @@ sys.path.insert(0, str(ROOT))
 import pandas as pd
 import requests
 
+from src.simulation.monte_carlo import dc_1x2   # λ -> 1X2 (para el modo "facts")
+
 PRED = ROOT / "files/f3_output/match_predictions.csv"
 OUT = ROOT / "results/reports/dossier.md"
 DELTA_MAX = 0.08   # ajuste máximo por clase que la IA puede aplicar (acota su poder)
@@ -190,6 +192,96 @@ def llm_adjust(home, away, p, news, url, model, api_key=None):
     return (0.0, 0.0, 0.0, note)
 
 
+# --------- etapa 2 (alt): Qwen como EXTRACTOR DE HECHOS (no de opinión) -------
+# Patrón Beal et al. 2021: el LLM extrae hechos discretos verificables; el ajuste
+# de magnitud es FIJO y predefinido (el LLM no inventa cuánto mover λ).
+FACT_SYS = (
+    "Extrae HECHOS DISCRETOS Y VERIFICABLES del texto, no opiniones ni "
+    "predicciones. Responde SOLO un JSON con esta forma exacta: "
+    '{"home_key_player_out":{"is_out":false,"player_name":null,"confidence":0.0},'
+    '"away_key_player_out":{"is_out":false,"player_name":null,"confidence":0.0},'
+    '"home_rotation_expected":false,"away_rotation_expected":false,"notes":""}. '
+    "is_out solo true si hay confirmación explícita de lesión/suspensión/ausencia "
+    "de un TITULAR habitual (no 'podría faltar' = confidence baja). confidence 0-1. "
+    "rotation_expected true solo si el texto dice que el DT rotará (equipo ya "
+    "clasificado/eliminado). Sin info clara: deja los defaults. NO inventes.")
+
+_FACT_RF = {"type": "json_schema", "json_schema": {"name": "facts", "strict": False,
+    "schema": {"type": "object", "properties": {
+        "home_key_player_out": {"type": "object"},
+        "away_key_player_out": {"type": "object"},
+        "home_rotation_expected": {"type": "boolean"},
+        "away_rotation_expected": {"type": "boolean"},
+        "notes": {"type": "string"}}}}}
+
+DEFAULT_FACTS = {
+    "home_key_player_out": {"is_out": False, "player_name": None, "confidence": 0.0},
+    "away_key_player_out": {"is_out": False, "player_name": None, "confidence": 0.0},
+    "home_rotation_expected": False, "away_rotation_expected": False, "notes": ""}
+
+
+def _parse_facts(txt: str):
+    """Parsea el JSON anidado de hechos (maneja <think>/fences/texto alrededor)."""
+    txt = re.sub(r"<think>.*?</think>", "", txt, flags=re.DOTALL).replace("```json", "```")
+    m = re.search(r"\{.*\}", txt, re.DOTALL)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(0))
+    except Exception:
+        return None
+
+
+def extract_facts(home, away, news, url, model, api_key=None) -> dict:
+    """Qwen extrae hechos discretos del dossier. Sin noticias -> defaults."""
+    if not news or news.strip() in ("", "sin datos"):
+        return dict(DEFAULT_FACTS)
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    base = {"model": model, "temperature": 0, "max_tokens": 400,
+            "messages": [{"role": "system", "content": FACT_SYS},
+                         {"role": "user", "content": f"{home} vs {away}\n{news[:1500]}"}]}
+    for payload in ({**base, "response_format": _FACT_RF}, base):
+        try:
+            r = requests.post(f"{url}/chat/completions", timeout=120,
+                              headers=headers, json=payload)
+            if r.status_code != 200:
+                continue
+            d = _parse_facts(r.json()["choices"][0]["message"]["content"])
+            if d is None:
+                continue
+            return {**DEFAULT_FACTS, **d}
+        except Exception:
+            continue
+    return dict(DEFAULT_FACTS)
+
+
+# Magnitudes FIJAS (consistentes con el motor pre-partido V3) — el LLM no las decide
+_CONF_TH, _OUT_MULT, _ROT_MULT = 0.75, 0.92, 0.90   # baja titular -8%, rotación -10%
+
+
+def facts_to_lambda_mult(facts: dict):
+    """Hechos -> multiplicadores fijos de λ (home, away) + razones auditables."""
+    mh = ma = 1.0
+    reasons = []
+    h = facts.get("home_key_player_out") or {}
+    a = facts.get("away_key_player_out") or {}
+    if h.get("is_out") and float(h.get("confidence", 0) or 0) >= _CONF_TH:
+        mh *= _OUT_MULT
+        reasons.append(f"local: baja {h.get('player_name') or 'titular'} (-8% λ)")
+    if a.get("is_out") and float(a.get("confidence", 0) or 0) >= _CONF_TH:
+        ma *= _OUT_MULT
+        reasons.append(f"visita: baja {a.get('player_name') or 'titular'} (-8% λ)")
+    if facts.get("home_rotation_expected"):
+        mh *= _ROT_MULT
+        reasons.append("local: rotación esperada (-10% λ)")
+    if facts.get("away_rotation_expected"):
+        ma *= _ROT_MULT
+        reasons.append("visita: rotación esperada (-10% λ)")
+    return mh, ma, reasons
+
+
 def apply_adjustment(p, deltas):
     """Aplica deltas acotados y renormaliza (el modelo sigue siendo el ancla)."""
     import numpy as np
@@ -203,6 +295,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--analyzer", choices=["local", "none"], default="local",
                     help="local = Qwen vía LM Studio; none = solo modelo (offline)")
+    ap.add_argument("--llm-mode", choices=["facts", "adjust"], default="facts",
+                    help="facts = Qwen extrae hechos -> ajuste λ FIJO (auditable, "
+                         "default); adjust = Qwen propone delta 1X2 libre (±0.08)")
     ap.add_argument("--search", choices=["ddg", "gemini", "none"], default="ddg",
                     help="buscador de info por equipo: ddg = DuckDuckGo (gratis, "
                          "sin key, default); gemini = Gemini (necesita key+cuota); "
@@ -252,13 +347,22 @@ def main():
             news = f"{r.team_a}: {na or 'sin datos'} || {r.team_b}: {nb or 'sin datos'}"
         else:
             news = ""
-        if use_llm:
+        if use_llm and args.llm_mode == "facts":
+            facts = extract_facts(r.team_a, r.team_b, news, lm_url, lm_model, lm_key)
+            mh, ma, reasons = facts_to_lambda_mult(facts)
+            la, lb = float(r.lambda_a), float(r.lambda_b)
+            base, adj_dc = dc_1x2(la, lb), dc_1x2(la * mh, lb * ma)
+            vals = [max(p[i] + (adj_dc[i] - base[i]), 1e-4) for i in range(3)]
+            s = sum(vals)
+            adj = [v / s for v in vals]
+            reason = "; ".join(reasons) or "sin hechos relevantes"
+        elif use_llm:
             dh, dd, da, reason = llm_adjust(r.team_a, r.team_b, p, news,
                                             lm_url, lm_model, lm_key)
+            adj = apply_adjustment(p, (dh, dd, da))
         else:
-            dh = dd = da = 0.0
             reason = "(solo modelo)"
-        adj = apply_adjustment(p, (dh, dd, da))
+            adj = p
         rows.append((r.group, r.team_a, r.team_b, r.pred_score, p, adj, reason,
                      float(r.exp_goals_a), float(r.exp_goals_b)))
         print(f"  {r.team_a} vs {r.team_b}: {reason}")
