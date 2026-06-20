@@ -138,6 +138,12 @@ python scripts/update_scorecard.py --match "Francia vs Senegal" --score 3-1
 python scripts/fetch_odds_2026.py            # writes a template to fill by hand…
 #   …or with an API key:  ODDS_API_KEY=xxx python scripts/fetch_odds_2026.py
 python scripts/run_groups_simulation.py --sims 50000 --alpha 0.3   # 0.3·model + 0.7·market
+
+# OPTIONAL — free "scout" layer: DuckDuckGo fetches per-team form/injury news (NO key),
+# a local Qwen (LM Studio :1234) proposes a bounded ±0.08 adjustment → results/reports/dossier.md
+python scripts/match_dossier.py --limit 8                       # DuckDuckGo + Qwen (default)
+python scripts/match_dossier.py --search none --analyzer none   # model-only table (offline)
+# (--search gemini also works if you set GEMINI_API_KEY, but the free tier rate-limits)
 ```
 
 Useful flags: `--backend poisson|gbm|xgb` · `--train historical|synthetic` · `--cutoff 2026-06-11` (ignore everything from this date on; `--cutoff none` to include matches already played) · `--no-classifier` · `--half-life 3.0` (temporal-decay half-life in years) · `--noise-sigma 0.10` (per-match lognormal "luck" noise in the Monte Carlo) · `--alpha 1.0` (market blend: 1.0 = model only, 0.0 = market only, 0.5 = half-and-half) · `--odds <csv>`.
@@ -191,6 +197,7 @@ scripts/
 ├── validate_microsim.py        # test the V3 engine for signal on real WC line-ups
 ├── predict_match.py            # GENERAL any-country A-vs-B W/D/L predictor (+ --evaluate)
 ├── microsim_groupstage.py      # group-stage A/B test: model vs model+microsim (polla pts)
+├── match_dossier.py            # per-match dossier: DuckDuckGo/Gemini news + local Qwen (free)
 ├── pre_match.py              # V3: 11v11 micro-sim from real line-ups (standalone)
 ├── run_groups_simulation.py  # end-to-end pipeline (--half-life, --noise-sigma, --alpha)
 ├── update_scorecard.py       # log real results into the README scorecard
