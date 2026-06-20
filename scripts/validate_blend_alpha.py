@@ -111,6 +111,18 @@ def run_club() -> None:
     print(f"  Lectura: peso del MODELO ≈ {best_alpha:.0%}, "
           f"del MERCADO ≈ {1-best_alpha:.0%}.")
 
+    # ---- check automático (Groll-Zeileis: el mercado gana en torneos) ----
+    PROD_ALPHA = 0.3
+    rps_prod = scores[int(round(PROD_ALPHA * 10))]
+    if rps_prod > rps_market + 1e-5:
+        print(f"\n  ⚠️ WARNING: con α de producción ({PROD_ALPHA}) el blend "
+              f"(RPS {rps_prod:.4f}) es PEOR que el mercado solo "
+              f"(RPS {rps_market:.4f}). Sugerencia: BAJAR α (más peso al "
+              f"mercado); el óptimo medido es α={best_alpha:.1f}.")
+    else:
+        print(f"\n  ✓ Con α de producción ({PROD_ALPHA}) el blend no empeora al "
+              "mercado.")
+
     _plot(alphas, scores, rps_model, rps_market, best_alpha,
           "Validación del blend (230k partidos de clubes, leak-free)")
 

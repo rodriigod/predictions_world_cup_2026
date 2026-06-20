@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from src.data.odds_tools import demargin_shin, power_vs_shin_gap
 from src.data.wc_schema import build_match_features, match_features_frame
 
 MAX_GOALS = 9          # truncamiento de la matriz de marcadores
@@ -104,23 +105,30 @@ def blend_with_market(model_probs: pd.DataFrame, odds_csv, alpha: float = 0.3
         return out
     key = {(r.home_team, r.away_team): r for r in odds.itertuples()}
     eps = 1e-9
+    flagged = []
     for i, m in out.iterrows():
         row = key.get((m["home_team"], m["away_team"]))
         if row is None:
             continue
+        oo = (float(row.odds_home), float(row.odds_draw), float(row.odds_away))
         try:
-            mh, md, ma = _demargin(float(row.odds_home), float(row.odds_draw),
-                                   float(row.odds_away))
+            mh, md, ma = demargin_shin(oo)     # Shin (1992): des-margining primario
         except (ValueError, ZeroDivisionError, TypeError):
             continue
         if not np.isfinite([mh, md, ma]).all():
             continue
+        # cross-check con el método power: si difieren >1pp, línea desbalanceada
+        if power_vs_shin_gap(oo) > 1.0:
+            flagged.append(f"{m['home_team']}-{m['away_team']}")
         pm = np.array([m["p_home"], m["p_draw"], m["p_away"]], float)
         pk = np.array([mh, md, ma], float)
         blended = (np.maximum(pm, eps) ** alpha) * (np.maximum(pk, eps) ** (1 - alpha))
         blended /= blended.sum()
         out.at[i, "p_home"], out.at[i, "p_draw"], out.at[i, "p_away"] = blended
         out.at[i, "blended"] = True
+    if flagged:
+        print(f"      ⚠️ {len(flagged)} línea(s) desbalanceada(s) (Shin≠power "
+              f">1pp), revisar manualmente: {flagged[:6]}")
     return out
 
 

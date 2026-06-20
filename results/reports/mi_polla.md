@@ -5,7 +5,7 @@ Marcador pronosticado por el modelo para cada casilla = el que MAXIMIZA los punt
 ## Grupo A
 
 - JUE 11/06 15:00 · México **[2] - [0]** Sudáfrica
-- JUE 11/06 22:00 · Corea del Sur **[1] - [0]** Rep. Checa
+- JUE 11/06 22:00 · Corea del Sur **[2] - [1]** Rep. Checa
 - JUE 18/06 12:00 · Rep. Checa **[1] - [0]** Sudáfrica
 - JUE 18/06 21:00 · México **[1] - [0]** Corea del Sur
 - MIÉ 24/06 21:00 · Rep. Checa **[0] - [1]** México
@@ -14,13 +14,13 @@ Marcador pronosticado por el modelo para cada casilla = el que MAXIMIZA los punt
 | Pos | Equipo | PJ | Pts | GF | GC | DG |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
 | 1 | México | 3 | **9** | 4 | 0 | +4 |
-| 2 | Corea del Sur | 3 | **6** | 3 | 1 | +2 |
-| 3 | Rep. Checa | 3 | **3** | 1 | 2 | -1 |
+| 2 | Corea del Sur | 3 | **6** | 4 | 2 | +2 |
+| 3 | Rep. Checa | 3 | **3** | 2 | 3 | -1 |
 | 4 | Sudáfrica | 3 | **0** | 0 | 5 | -5 |
 
 ## Grupo B
 
-- VIE 12/06 15:00 · Canadá **[2] - [0]** Bosnia y Her.
+- VIE 12/06 15:00 · Canadá **[1] - [0]** Bosnia y Her.
 - SÁB 13/06 15:00 · Catar **[0] - [3]** Suiza
 - JUE 18/06 15:00 · Suiza **[2] - [0]** Bosnia y Her.
 - JUE 18/06 18:00 · Canadá **[2] - [0]** Catar
@@ -30,8 +30,8 @@ Marcador pronosticado por el modelo para cada casilla = el que MAXIMIZA los punt
 | Pos | Equipo | PJ | Pts | GF | GC | DG |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
 | 1 | Suiza | 3 | **9** | 6 | 0 | +6 |
-| 2 | Canadá | 3 | **6** | 4 | 1 | +3 |
-| 3 | Bosnia y Her. | 3 | **3** | 2 | 4 | -2 |
+| 2 | Canadá | 3 | **6** | 3 | 1 | +2 |
+| 3 | Bosnia y Her. | 3 | **3** | 2 | 3 | -1 |
 | 4 | Catar | 3 | **0** | 0 | 7 | -7 |
 
 ## Grupo C
@@ -88,14 +88,14 @@ Marcador pronosticado por el modelo para cada casilla = el que MAXIMIZA los punt
 - DOM 14/06 22:00 · Suecia **[1] - [0]** Túnez
 - SÁB 20/06 13:00 · Países Bajos **[2] - [0]** Suecia
 - DOM 21/06 00:00 · Túnez **[0] - [1]** Japón
-- JUE 25/06 19:00 · Japón **[2] - [1]** Suecia
+- JUE 25/06 19:00 · Japón **[1] - [0]** Suecia
 - JUE 25/06 19:00 · Túnez **[0] - [2]** Países Bajos
 
 | Pos | Equipo | PJ | Pts | GF | GC | DG |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
 | 1 | Países Bajos | 3 | **9** | 5 | 0 | +5 |
-| 2 | Japón | 3 | **6** | 3 | 2 | +1 |
-| 3 | Suecia | 3 | **3** | 2 | 4 | -2 |
+| 2 | Japón | 3 | **6** | 2 | 1 | +1 |
+| 3 | Suecia | 3 | **3** | 1 | 3 | -2 |
 | 4 | Túnez | 3 | **0** | 0 | 4 | -4 |
 
 ## Grupo G
@@ -121,12 +121,12 @@ Marcador pronosticado por el modelo para cada casilla = el que MAXIMIZA los punt
 - DOM 21/06 12:00 · España **[3] - [0]** Arabia S.
 - DOM 21/06 18:00 · Uruguay **[1] - [0]** Cabo Verde
 - VIE 26/06 20:00 · Cabo Verde **[1] - [2]** Arabia S.
-- VIE 26/06 20:00 · Uruguay **[0] - [1]** España
+- VIE 26/06 20:00 · Uruguay **[0] - [2]** España
 
 | Pos | Equipo | PJ | Pts | GF | GC | DG |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
-| 1 | España | 3 | **9** | 7 | 0 | +7 |
-| 2 | Uruguay | 3 | **6** | 2 | 1 | +1 |
+| 1 | España | 3 | **9** | 8 | 0 | +8 |
+| 2 | Uruguay | 3 | **6** | 2 | 2 | 0 |
 | 3 | Arabia S. | 3 | **3** | 2 | 5 | -3 |
 | 4 | Cabo Verde | 3 | **0** | 1 | 6 | -5 |
 
@@ -136,13 +136,13 @@ Marcador pronosticado por el modelo para cada casilla = el que MAXIMIZA los punt
 - MAR 16/06 18:00 · Irak **[0] - [2]** Noruega
 - LUN 22/06 17:00 · Francia **[3] - [0]** Irak
 - LUN 22/06 20:00 · Noruega **[1] - [0]** Senegal
-- VIE 26/06 15:00 · Noruega **[1] - [2]** Francia
+- VIE 26/06 15:00 · Noruega **[0] - [1]** Francia
 - VIE 26/06 15:00 · Senegal **[2] - [0]** Irak
 
 | Pos | Equipo | PJ | Pts | GF | GC | DG |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
-| 1 | Francia | 3 | **9** | 6 | 1 | +5 |
-| 2 | Noruega | 3 | **6** | 4 | 2 | +2 |
+| 1 | Francia | 3 | **9** | 5 | 0 | +5 |
+| 2 | Noruega | 3 | **6** | 3 | 1 | +2 |
 | 3 | Senegal | 3 | **3** | 2 | 2 | 0 |
 | 4 | Irak | 3 | **0** | 0 | 7 | -7 |
 
@@ -183,13 +183,13 @@ Marcador pronosticado por el modelo para cada casilla = el que MAXIMIZA los punt
 - MIÉ 17/06 16:00 · Inglaterra **[1] - [0]** Croacia
 - MIÉ 17/06 19:00 · Ghana **[0] - [1]** Panamá
 - MAR 23/06 16:00 · Inglaterra **[2] - [0]** Ghana
-- MAR 23/06 19:00 · Panamá **[0] - [2]** Croacia
+- MAR 23/06 19:00 · Panamá **[0] - [1]** Croacia
 - SÁB 27/06 17:00 · Panamá **[0] - [2]** Inglaterra
 - SÁB 27/06 17:00 · Croacia **[2] - [0]** Ghana
 
 | Pos | Equipo | PJ | Pts | GF | GC | DG |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
 | 1 | Inglaterra | 3 | **9** | 5 | 0 | +5 |
-| 2 | Croacia | 3 | **6** | 4 | 1 | +3 |
-| 3 | Panamá | 3 | **3** | 1 | 4 | -3 |
+| 2 | Croacia | 3 | **6** | 3 | 1 | +2 |
+| 3 | Panamá | 3 | **3** | 1 | 3 | -2 |
 | 4 | Ghana | 3 | **0** | 0 | 5 | -5 |

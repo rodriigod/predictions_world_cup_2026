@@ -239,6 +239,13 @@ A complete, honest record of the work — including the dead ends, because knowi
 | **"Even match = draw" heuristic** | not data-backed (even games still have a winner) — dropped |
 | **Micro-sim as a forecaster** | no signal without player stats; *with* FIFA ratings it still **doesn't improve the pool** (group A/B: −5 / 0 pts) |
 | Optuna tuner | built (`optuna_tuner.py`) but not promoted — prior leak-free tuning already showed defaults hold |
+| **WC-2026 features** (host-nation, CONCACAF, altitude, heat, confederation) | not added: host already = `is_host`; confederation/host-continent **already measured neutral/worse**; altitude/heat **infeasible** (no venue/city column in `fixtures_2026.csv`) |
+
+### 🎯 Odds-pipeline fine-tuning (Shin 1992 / power / log-consensus)
+- **Shin de-margining is now primary** in `blend_with_market` (`src/data/odds_tools.py`), replacing proportional normalization. Measured on 130k club matches with Bet365 odds: Shin RPS **0.20086** vs proportional 0.20098 vs power 0.20084 — a *real but tiny* gain (the market is already near-efficient); adopted because it's principled and never worse.
+- **Power method as cross-check:** if Shin and power disagree by >1pp on a match it's logged as an *unbalanced line — review manually* (~3.5% of club matches).
+- **Multi-book log-consensus** (`logit_consensus`) implemented and ready, but we only have one consensus line per match today, so it isn't validated — wire it when per-bookmaker odds (e.g. Pinnacle) exist.
+- **Auto-warning** in `validate_blend_alpha.py`: if the blend at the production α is worse than market-only it prints a *lower α* suggestion. It currently fires (blend@α=0.3 RPS 0.2015 > market 0.2010) — confirming Groll-Zeileis (EURO 2024): in tournaments the market beats the model, so **α belongs near 0**.
 
 ### 🔌 Data sources — used & explored
 - **Used:** martj42 international_results (~49k matches, the core), eloratings.net, Transfermarkt, **the-odds-api** (live odds), **FIFA-24 player dataset** (micro-sim), club Bet365 dataset (α validation), **Fjelstul WC DB** (lineups for micro-sim validation).
@@ -263,7 +270,7 @@ A complete, honest record of the work — including the dead ends, because knowi
 | Match | Score |
 |---|:-:|
 | México – Sudáfrica | **2-0** |
-| Corea del Sur – Rep. Checa | **1-0** |
+| Corea del Sur – Rep. Checa | **2-1** |
 | Rep. Checa – Sudáfrica | **1-0** |
 | México – Corea del Sur | **1-0** |
 | Rep. Checa – México | **0-1** |
@@ -274,7 +281,7 @@ Table: **México 9** · **Corea del Sur 6** · **Rep. Checa 3 ✦** · Sudáfric
 ### Group B — Suiza, Canadá, Bosnia y Her. ✦
 | Match | Score |
 |---|:-:|
-| Canadá – Bosnia y Her. | **2-0** |
+| Canadá – Bosnia y Her. | **1-0** |
 | Catar – Suiza | **0-3** |
 | Suiza – Bosnia y Her. | **2-0** |
 | Canadá – Catar | **2-0** |
@@ -326,7 +333,7 @@ Table: **Alemania 9** · **Ecuador 6** · **Costa de Marfil 3 ✦** · Curazao 0
 | Suecia – Túnez | **1-0** |
 | Países Bajos – Suecia | **2-0** |
 | Túnez – Japón | **0-1** |
-| Japón – Suecia | **2-1** |
+| Japón – Suecia | **1-0** |
 | Túnez – Países Bajos | **0-2** |
 
 Table: **Países Bajos 9** · **Japón 6** · Suecia 3 · Túnez 0
@@ -351,7 +358,7 @@ Table: **Bélgica 9** · **Egipto 6** · **Irán 3 ✦** · Nueva Zelanda 0
 | España – Arabia S. | **3-0** |
 | Uruguay – Cabo Verde | **1-0** |
 | Cabo Verde – Arabia S. | **1-2** |
-| Uruguay – España | **0-1** |
+| Uruguay – España | **0-2** |
 
 Table: **España 9** · **Uruguay 6** · Arabia S. 3 · Cabo Verde 0
 
@@ -362,7 +369,7 @@ Table: **España 9** · **Uruguay 6** · Arabia S. 3 · Cabo Verde 0
 | Irak – Noruega | **0-2** |
 | Francia – Irak | **3-0** |
 | Noruega – Senegal | **1-0** |
-| Noruega – Francia | **1-2** |
+| Noruega – Francia | **0-1** |
 | Senegal – Irak | **2-0** |
 
 Table: **Francia 9** · **Noruega 6** · **Senegal 3 ✦** · Irak 0
@@ -397,7 +404,7 @@ Table: **Portugal 9** · **Colombia 6** · **RD Congo 3 ✦** · Uzbekistán 0
 | Inglaterra – Croacia | **1-0** |
 | Ghana – Panamá | **0-1** |
 | Inglaterra – Ghana | **2-0** |
-| Panamá – Croacia | **0-2** |
+| Panamá – Croacia | **0-1** |
 | Panamá – Inglaterra | **0-2** |
 | Croacia – Ghana | **2-0** |
 
@@ -419,7 +426,7 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 - 2026-07-01 · Bélgica **1-0** Senegal → **Bélgica** (45%/28%/27%)
 - 2026-07-02 · Colombia **1-0** Croacia → **Colombia** (51%/27%/23%)
 - 2026-07-02 · España **2-0** Austria → **España** (65%/23%/13%)
-- 2026-07-02 · Suiza **2-0** Suecia → **Suiza** (67%/20%/13%)
+- 2026-07-02 · Suiza **1-0** Irán → **Suiza** (43%/29%/29%)
 - 2026-07-03 · Argentina **1-0** Uruguay → **Argentina** (56%/27%/17%)
 - 2026-07-03 · Portugal **1-0** Argelia → **Portugal** (47%/28%/25%)
 - 2026-07-03 · Turquía **1-0** Egipto → **Turquía** (49%/29%/23%)
@@ -451,24 +458,24 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 - 2026-07-19 · España **1-0** Argentina → **España** (37%/29%/34%)
 
 
-### 🏆 PREDICTED CHAMPION: **España** (16.1%)
+### 🏆 PREDICTED CHAMPION: **España** (16.6%)
 
 ## Title probabilities (50,000 Monte Carlo simulations)
 
 | Team | Reach R16 | Quarters | Semis | Final | **CHAMPION** |
 |---|:-:|:-:|:-:|:-:|:-:|
-| España | 70% | 50% | 37% | 25% | **16.1%** |
-| Argentina | 66% | 50% | 34% | 22% | **14.1%** |
-| Francia | 69% | 45% | 28% | 15% | **8.7%** |
-| Brasil | 66% | 41% | 24% | 13% | **7.0%** |
-| Inglaterra | 66% | 39% | 23% | 13% | **6.9%** |
-| Colombia | 64% | 36% | 21% | 12% | **6.0%** |
-| México | 66% | 38% | 22% | 11% | **5.6%** |
-| Portugal | 63% | 34% | 18% | 9% | **4.5%** |
-| Canadá | 60% | 31% | 15% | 7% | **3.1%** |
-| Bélgica | 60% | 33% | 13% | 6% | **2.7%** |
-| Marruecos | 51% | 28% | 14% | 6% | **2.7%** |
-| Ecuador | 55% | 27% | 13% | 6% | **2.6%** |
+| España | 71% | 51% | 37% | 26% | **16.6%** |
+| Argentina | 67% | 50% | 34% | 23% | **14.3%** |
+| Francia | 68% | 44% | 27% | 15% | **8.3%** |
+| Brasil | 66% | 41% | 24% | 13% | **6.9%** |
+| Inglaterra | 66% | 40% | 24% | 13% | **6.8%** |
+| Colombia | 64% | 35% | 21% | 12% | **5.9%** |
+| México | 65% | 38% | 21% | 11% | **5.6%** |
+| Portugal | 63% | 34% | 18% | 9% | **4.4%** |
+| Canadá | 61% | 31% | 15% | 7% | **3.2%** |
+| Ecuador | 55% | 27% | 13% | 6% | **2.7%** |
+| Bélgica | 60% | 33% | 14% | 7% | **2.7%** |
+| Suiza | 61% | 30% | 14% | 6% | **2.5%** |
 
 ---
 
@@ -479,8 +486,8 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 | Date | Grp | Match | Predicted | Actual | Pts (5/3/0) |
 |---|:-:|---|:-:|:-:|:-:|
 | 11/06 | A | México – Sudáfrica | 2-0 | 2-0 | ✅ 5 |
-| 11/06 | A | Corea del Sur – Rep. Checa | 1-0 | 2-1 | ✅ 3 |
-| 12/06 | B | Canadá – Bosnia y Her. | 2-0 | 1-1 | ❌ 0 |
+| 11/06 | A | Corea del Sur – Rep. Checa | 2-1 | 2-1 | ✅ 5 |
+| 12/06 | B | Canadá – Bosnia y Her. | 1-0 | 1-1 | ❌ 0 |
 | 12/06 | D | EEUU – Paraguay | 1-0 | 4-1 | ✅ 3 |
 | 13/06 | B | Catar – Suiza | 0-3 | 1-1 | ❌ 0 |
 | 13/06 | C | Brasil – Marruecos | 1-0 | 1-1 | ❌ 0 |
@@ -505,9 +512,9 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 | 18/06 | A | Rep. Checa – Sudáfrica | 1-0 | 1-1 | ❌ 0 |
 | 18/06 | B | Suiza – Bosnia y Her. | 2-0 | 4-1 | ✅ 3 |
 | 18/06 | B | Canadá – Catar | 2-0 | 6-0 | ✅ 3 |
-| 18/06 | A | México – Corea del Sur | 1-0 |   |   |
-| 19/06 | D | EEUU – Australia | 2-1 |   |   |
-| 19/06 | C | Escocia – Marruecos | 0-1 |   |   |
+| 18/06 | A | México – Corea del Sur | 1-0 | 1-0 | ✅ 5 |
+| 19/06 | D | EEUU – Australia | 2-1 | 2-0 | ✅ 3 |
+| 19/06 | C | Escocia – Marruecos | 0-1 | 0-1 | ✅ 5 |
 | 19/06 | C | Brasil – Haití | 3-0 |   |   |
 | 19/06 | D | Turquía – Paraguay | 1-0 |   |   |
 | 20/06 | F | Países Bajos – Suecia | 2-0 |   |   |
@@ -524,7 +531,7 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 | 22/06 | J | Jordania – Argelia | 0-2 |   |   |
 | 23/06 | K | Portugal – Uzbekistán | 2-0 |   |   |
 | 23/06 | L | Inglaterra – Ghana | 2-0 |   |   |
-| 23/06 | L | Panamá – Croacia | 0-2 |   |   |
+| 23/06 | L | Panamá – Croacia | 0-1 |   |   |
 | 23/06 | K | Colombia – RD Congo | 2-0 |   |   |
 | 24/06 | B | Suiza – Canadá | 1-0 |   |   |
 | 24/06 | B | Bosnia y Her. – Catar | 2-0 |   |   |
@@ -534,14 +541,14 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 | 24/06 | A | Sudáfrica – Corea del Sur | 0-2 |   |   |
 | 25/06 | E | Curazao – Costa de Marfil | 0-2 |   |   |
 | 25/06 | E | Ecuador – Alemania | 0-1 |   |   |
-| 25/06 | F | Japón – Suecia | 2-1 |   |   |
+| 25/06 | F | Japón – Suecia | 1-0 |   |   |
 | 25/06 | F | Túnez – Países Bajos | 0-2 |   |   |
 | 25/06 | D | Turquía – EEUU | 1-2 |   |   |
 | 25/06 | D | Paraguay – Australia | 1-0 |   |   |
-| 26/06 | I | Noruega – Francia | 1-2 |   |   |
+| 26/06 | I | Noruega – Francia | 0-1 |   |   |
 | 26/06 | I | Senegal – Irak | 2-0 |   |   |
 | 26/06 | H | Cabo Verde – Arabia S. | 1-2 |   |   |
-| 26/06 | H | Uruguay – España | 0-1 |   |   |
+| 26/06 | H | Uruguay – España | 0-2 |   |   |
 | 26/06 | G | Egipto – Irán | 1-0 |   |   |
 | 26/06 | G | Nueva Zelanda – Bélgica | 0-2 |   |   |
 | 27/06 | L | Panamá – Inglaterra | 0-2 |   |   |
@@ -551,7 +558,7 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 | 27/06 | J | Argelia – Austria | 0-1 |   |   |
 | 27/06 | J | Jordania – Argentina | 0-2 |   |   |
 
-**Running total: 44 pts** · exact scores: 1/27 · outcomes (≥3pts): 14/27 · played: 27/72
+**Running total: 59 pts** · exact scores: 4/30 · outcomes (≥3pts): 17/30 · played: 30/72
 
 ---
 
