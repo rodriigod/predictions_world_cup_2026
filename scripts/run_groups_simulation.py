@@ -51,6 +51,9 @@ def main() -> None:
                          "0.5=mitad. Requiere --odds con datos.")
     ap.add_argument("--odds", default=str(ROOT / "files/f0_raw/odds_2026.csv"),
                     help="CSV de odds 1X2 del mercado (ver fetch_odds_2026.py)")
+    ap.add_argument("--dynamic-alpha", action="store_true",
+                    help="EXPERIMENTAL: α variable por confederación (sesgo "
+                         "eurocéntrico). No validable sin odds históricas; default OFF.")
     ap.add_argument("--teams",
                     default=str(ROOT / "files/f0_raw/teams_2026.csv"))
     ap.add_argument("--fixtures",
@@ -158,7 +161,7 @@ def main() -> None:
     sim = GroupStageSimulator(teams, fixtures, model,
                               lambda_jitter=args.noise_sigma,
                               odds_csv=str(odds_path) if use_odds else None,
-                              blend_alpha=args.alpha,
+                              blend_alpha=args.alpha, dynamic_alpha=args.dynamic_alpha,
                               played_results=played, seed=args.seed)
     if use_odds:
         print(f"      Blend con mercado (alpha={args.alpha}): "

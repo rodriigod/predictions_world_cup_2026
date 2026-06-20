@@ -20,10 +20,12 @@ carga desde files/f0_raw/fixtures_2026.csv. Cada iteración del torneo:
 
 from collections import Counter
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from src.data.odds_tools import demargin_shin, power_vs_shin_gap
 from src.data.wc_schema import build_match_features, match_features_frame
 
 MAX_GOALS = 9          # truncamiento de la matriz de marcadores
@@ -104,24 +106,54 @@ def blend_with_market(model_probs: pd.DataFrame, odds_csv, alpha: float = 0.3
         return out
     key = {(r.home_team, r.away_team): r for r in odds.itertuples()}
     eps = 1e-9
+    flagged = []
+    per_row_alpha = "alpha" in out.columns   # α dinámico por partido (opcional)
     for i, m in out.iterrows():
         row = key.get((m["home_team"], m["away_team"]))
         if row is None:
             continue
+        oo = (float(row.odds_home), float(row.odds_draw), float(row.odds_away))
         try:
-            mh, md, ma = _demargin(float(row.odds_home), float(row.odds_draw),
-                                   float(row.odds_away))
+            mh, md, ma = demargin_shin(oo)     # Shin (1992): des-margining primario
         except (ValueError, ZeroDivisionError, TypeError):
             continue
         if not np.isfinite([mh, md, ma]).all():
             continue
+        # cross-check con el método power: si difieren >1pp, línea desbalanceada
+        gap = power_vs_shin_gap(oo)
+        if gap > 1.0:
+            flagged.append({"home_team": m["home_team"], "away_team": m["away_team"],
+                            "max_divergence_pp": round(gap, 3)})
+        a = float(m["alpha"]) if per_row_alpha else alpha
         pm = np.array([m["p_home"], m["p_draw"], m["p_away"]], float)
         pk = np.array([mh, md, ma], float)
-        blended = (np.maximum(pm, eps) ** alpha) * (np.maximum(pk, eps) ** (1 - alpha))
+        blended = (np.maximum(pm, eps) ** a) * (np.maximum(pk, eps) ** (1 - a))
         blended /= blended.sum()
         out.at[i, "p_home"], out.at[i, "p_draw"], out.at[i, "p_away"] = blended
         out.at[i, "blended"] = True
+    if flagged:
+        fp = Path(__file__).resolve().parents[2] / "results/flagged_odds.csv"
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(flagged).to_csv(fp, index=False)   # CAMBIO 1: log auditable
+        names = [f"{f['home_team']}-{f['away_team']}" for f in flagged]
+        print(f"      ⚠️ {len(flagged)} línea(s) desbalanceada(s) (Shin≠power "
+              f">1pp) -> {fp.name}: {names[:6]}")
     return out
+
+
+def get_dynamic_alpha(home_conf: str, away_conf: str, base_alpha: float = 0.3) -> float:
+    """α (peso del modelo) variable por confederación — sesgo eurocéntrico del
+    mercado (Cambio 2). Mercado UEFA/CONMEBOL muy eficiente -> α más bajo; un
+    equipo potencialmente subvalorado (CONCACAF/CAF/AFC/OFC) vs uno fuerte ->
+    α más alto. EXPERIMENTAL: NO validable (no hay odds históricas de Mundial)
+    y la confederación ya salió neutra en backtests previos -> default OFF."""
+    strong = {"UEFA", "CONMEBOL"}
+    hs, aw = home_conf in strong, away_conf in strong
+    if hs and aw:
+        return max(base_alpha - 0.10, 0.05)
+    if hs != aw:
+        return min(base_alpha + 0.15, 0.55)
+    return base_alpha
 
 
 def lambdas_from_1x2(p1: float, pX: float, p2: float,
@@ -195,7 +227,7 @@ class GroupStageSimulator:
     def __init__(self, teams: pd.DataFrame, fixtures: pd.DataFrame, model,
                  rho: float = DC_RHO, lambda_jitter: float = LAMBDA_JITTER,
                  calibration_temp: float = LAMBDA_TEMPERATURE,
-                 odds_csv=None, blend_alpha: float = 1.0,
+                 odds_csv=None, blend_alpha: float = 1.0, dynamic_alpha: bool = False,
                  played_results: pd.DataFrame | None = None,
                  seed: int = 42):
         """teams: TEAM_COLUMNS, una fila por equipo.
@@ -209,6 +241,7 @@ class GroupStageSimulator:
         self.calibration_temp = calibration_temp
         self.odds_csv = odds_csv
         self.blend_alpha = blend_alpha
+        self.dynamic_alpha = dynamic_alpha
         self.n_blended = 0
         self.rng = np.random.default_rng(seed)
         self._idx = {t: i for i, t in enumerate(self.teams["team"])}
@@ -240,6 +273,12 @@ class GroupStageSimulator:
             rows.append({"home_team": fx["team_a"], "away_team": fx["team_b"],
                          "p_home": p1, "p_draw": pX, "p_away": p2})
         model_probs = pd.DataFrame(rows)
+        if self.dynamic_alpha and "confed" in self.teams.columns:
+            cf = dict(zip(self.teams["team"], self.teams["confed"]))
+            model_probs["alpha"] = [
+                get_dynamic_alpha(cf.get(fx["team_a"], "UEFA"),
+                                  cf.get(fx["team_b"], "UEFA"), self.blend_alpha)
+                for _, fx in self.fixtures.iterrows()]
         blended = blend_with_market(model_probs, self.odds_csv, self.blend_alpha)
         for i in range(len(self.fixtures)):
             if not bool(blended.at[i, "blended"]):

@@ -124,7 +124,8 @@ def test_blend_with_market_alpha_extremes():
     odds = pd.DataFrame([{
         "home_team": "A", "away_team": "B",
         "odds_home": 3.0, "odds_draw": 3.0, "odds_away": 2.3}])
-    mkt = _demargin(3.0, 3.0, 2.3)
+    from src.data.odds_tools import demargin_shin
+    mkt = demargin_shin((3.0, 3.0, 2.3))   # blend usa Shin como des-margining
     only_model = blend_with_market(model_probs, odds, alpha=1.0)
     only_market = blend_with_market(model_probs, odds, alpha=0.0)
     assert bool(only_model.at[0, "blended"])
