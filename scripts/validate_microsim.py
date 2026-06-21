@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT))
 import numpy as np
 import pandas as pd
 
-from src.simulation.match_engine import Player, Squad, squad_lambdas
+from core.simulation.match_engine import Player, Squad, squad_lambdas
 
 CACHE = ROOT / "files/cache"
 YEARS = {"WC-2014", "WC-2018", "WC-2022"}

@@ -25,9 +25,9 @@ sys.path.insert(0, str(ROOT))
 import numpy as np
 import pandas as pd
 
-from src.data.fifa_ratings import NPXG_CAL, POS_SCALE, _f, _norm
-from src.data.historical import NAME_MAP
-from src.simulation.match_engine import Player, Squad, simulate_match
+from core.data.fifa_ratings import NPXG_CAL, POS_SCALE, _f, _norm
+from core.data.historical import NAME_MAP
+from core.simulation.match_engine import Player, Squad, simulate_match
 
 FIFA = pd.read_csv(ROOT / "files/cache/fifa24_players.csv")
 PRED = pd.read_csv(ROOT / "files/f3_output/match_predictions.csv")

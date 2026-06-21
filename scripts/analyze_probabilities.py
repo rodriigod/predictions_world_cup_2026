@@ -21,9 +21,9 @@ sys.path.insert(0, str(ROOT))
 import numpy as np
 import pandas as pd
 
-from src.data.historical import build_historical_dataset
-from src.models.poisson_goals import PoissonGoalsModel
-from src.simulation.monte_carlo import _dixon_coles_matrix
+from core.data.historical import build_historical_dataset
+from core.models.poisson_goals import PoissonGoalsModel
+from core.simulation.monte_carlo import _dixon_coles_matrix
 
 
 def build_predictions(first_year=2010, last_year=2024) -> pd.DataFrame:

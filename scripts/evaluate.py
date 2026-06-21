@@ -12,8 +12,8 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.data import DataLoader
-from src.utils import ModelMetrics, Visualizer
+from core.data import DataLoader
+from core.utils import ModelMetrics, Visualizer
 from scripts.config import MODELS_PATH, OUTPUT_PATH
 
 

@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT))
 import pandas as pd
 import requests
 
-from src.simulation.monte_carlo import dc_1x2   # λ -> 1X2 (para el modo "facts")
+from core.simulation.monte_carlo import dc_1x2   # λ -> 1X2 (para el modo "facts")
 
 PRED = ROOT / "files/f3_output/match_predictions.csv"
 OUT = ROOT / "results/reports/dossier.md"

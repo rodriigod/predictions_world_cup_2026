@@ -20,8 +20,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.data.historical import build_historical_dataset
-from src.utils.metrics import ModelMetrics
+from core.data.historical import build_historical_dataset
+from core.utils.metrics import ModelMetrics
 
 CLASSES = ["1", "X", "2"]
 IDX = {c: i for i, c in enumerate(CLASSES)}

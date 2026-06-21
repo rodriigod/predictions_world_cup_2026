@@ -17,7 +17,7 @@ Machine-learning pipeline that predicts **every match of the 2026 FIFA World Cup
 | [Transfermarkt](https://www.transfermarkt.com) | Squad market values for the 48 qualified teams |
 | `Polla_Mundial_2026_Fase_de_Grupos.pdf` / `Polla Mundial 2026.xlsx` | The official pool: real groups, fixture and knockout bracket |
 
-### 2. Feature engineering (`src/data/historical.py`)
+### 2. Feature engineering (`core/data/historical.py`)
 
 The pipeline replays history match by match and builds **leak-free rolling features** — every match only sees data from *before* it was played:
 
@@ -30,7 +30,7 @@ The pipeline replays history match by match and builds **leak-free rolling featu
 
 The full feature taxonomy (60+ variables incl. climate, altitude, travel fatigue, squad fatigue, betting odds) is documented in [DATA_DICTIONARY.md](DATA_DICTIONARY.md).
 
-### 3. Models (`src/models/`)
+### 3. Models (`core/models/`)
 
 | Model | Role |
 |---|---|
@@ -45,7 +45,7 @@ Two classic corrections from **Dixon & Coles (1997)** are implemented:
 
 > 📊 An honest finding, consistent with the literature: on these features the **logistic baseline and Random Forest are within ~0.003 log-loss of each other** (≈0.865), and neither meaningfully beats Poisson+DC on the World-Cup backtest. International football signal is mostly linear in ELO + pi-ratings — which is why the Poisson GLM (which also yields exact scorelines) drives the predictions.
 
-### 4. Monte Carlo simulation (`src/simulation/`)
+### 4. Monte Carlo simulation (`core/simulation/`)
 
 The **full tournament is simulated 50,000 times** (~90 s):
 
@@ -159,7 +159,7 @@ Useful flags: `--backend poisson|gbm|xgb` · `--train historical|synthetic` · `
 >
 > **Is the engine signal or noise? (measured, `validate_microsim.py`).** Ran on **192 real line-ups from the 2014/2018/2022 World Cups** (Fjelstul DB). Two scenarios: **(A)** with position defaults only (what you actually get without per-player stats) → λ is **identical for both teams**, correlation with results **+0.00, win-rate flat** = literally **zero signal**. **(B)** feeding a leak-free per-player attacking proxy (prior-WC goals) → λ correlates with the real margin (**Pearson +0.33**) and the home win-rate climbs **30% → 61%** from the low to high λ tercile. **Verdict: the engine mechanism works — but only if fed real per-player quality.** The bottleneck is 100% the player-stat data (which FBref blocks), not the model.
 >
-> **Player data — solved via FIFA ratings (`src/data/fifa_ratings.py`).** Since FBref blocks scrapers, the engine now draws per-player quality from the freely-downloadable **FIFA-24 player dataset** (~5.7k players, 135 countries: finishing, shot_power, GK ratings…). Run `python scripts/pre_match.py --lineup … --stats fifa` (default). It's a video-game *proxy* (not real npxG) and matches ~5-6 of 11 names per side (accents/short names miss → position default), but it makes λ differentiate by real squad quality (e.g. Argentina λ 1.69 vs España 1.44) — good enough to predict current matches, the bottleneck the engine needed.
+> **Player data — solved via FIFA ratings (`core/data/fifa_ratings.py`).** Since FBref blocks scrapers, the engine now draws per-player quality from the freely-downloadable **FIFA-24 player dataset** (~5.7k players, 135 countries: finishing, shot_power, GK ratings…). Run `python scripts/pre_match.py --lineup … --stats fifa` (default). It's a video-game *proxy* (not real npxG) and matches ~5-6 of 11 names per side (accents/short names miss → position default), but it makes λ differentiate by real squad quality (e.g. Argentina λ 1.69 vs España 1.44) — good enough to predict current matches, the bottleneck the engine needed.
 >
 > **Does blending the micro into the group-stage forecast help? No (measured, `microsim_groupstage.py`).** Auto-picking each country's XI from FIFA and blending the micro's λ into the production model, scored against the 27 played group matches: model **46 polla pts** vs model+micro **41** at micro-weight 0.3 (**−5**), and a tie at weight 0.15. The micro never improves the pool — consistent with every other ensemble test here. It also can't cover smaller nations (Qatar, Uzbekistan, Iran… have <11 players in the FIFA set). Use it for line-up what-ifs, not as a forecaster.
 
@@ -173,8 +173,19 @@ Outputs land in:
 
 ## 📁 Project structure
 
+**Modular multi-model layout.** The repo is organized so that **new prediction
+models can be added without touching the production pipeline**. Every model
+lives in its own top-level folder and speaks the **same output language** —
+[`MatchPrediction`](schema.py) — so they can later be combined in an ensemble.
+
 ```
-src/
+schema.py                # COMMON OUTPUT CONTRACT every model must return
+                         #   (team_home/away, match_date, prob_home/draw/away,
+                         #    lambda_home/away, score_matrix?, model_name/version, confidence?)
+
+core/                    # ⭐ PRODUCTION pipeline — Poisson GLM + Dixon-Coles + Monte Carlo
+│                        #   (RPS ~0.197). Untouched logic; this is what runs today.
+├── adapter.py           # output-adaptation layer: matches DataFrame -> list[MatchPrediction]
 ├── data/
 │   ├── wc_schema.py      # feature schema (programmatic data dictionary)
 │   ├── historical.py     # real-data trainer: ELO replay + rolling features
@@ -189,8 +200,13 @@ src/
 │   └── optuna_tuner.py  # leak-free Optuna search (TimeSeriesSplit, RPS objective)
 └── simulation/
     ├── monte_carlo.py    # group stage + knockout MC, Dixon-Coles, pi-ratings, incentives
+    ├── match_engine.py   # V3 11v11 pre-match micro-sim from line-ups
     ├── knockout.py       # 2026 bracket, third-place allocation, deterministic run
     └── report.py         # markdown/console reports
+
+microsim/                # 🚧 (empty) future squad-level micro-simulation model
+llm_features/            # 🚧 (empty) future LLM-derived signals / model
+ensemble/                # 🚧 (empty) combines MatchPredictions from all models
 scripts/
 ├── update_team_data.py   # refresh ELO (live) + market values
 ├── fetch_odds_2026.py        # download/prepare bookmaker 1X2 odds for the blend
@@ -252,7 +268,7 @@ A complete, honest record of the work — including the dead ends, because knowi
 | **WC-2026 features** (host-nation, CONCACAF, altitude, heat, confederation) | not added: host already = `is_host`; confederation/host-continent **already measured neutral/worse**; altitude/heat **infeasible** (no venue/city column in `fixtures_2026.csv`) |
 
 ### 🎯 Odds-pipeline fine-tuning (Shin 1992 / power / log-consensus)
-- **Shin de-margining is now primary** in `blend_with_market` (`src/data/odds_tools.py`), replacing proportional normalization. Measured on 130k club matches with Bet365 odds: Shin RPS **0.20086** vs proportional 0.20098 vs power 0.20084 — a *real but tiny* gain (the market is already near-efficient); adopted because it's principled and never worse.
+- **Shin de-margining is now primary** in `blend_with_market` (`core/data/odds_tools.py`), replacing proportional normalization. Measured on 130k club matches with Bet365 odds: Shin RPS **0.20086** vs proportional 0.20098 vs power 0.20084 — a *real but tiny* gain (the market is already near-efficient); adopted because it's principled and never worse.
 - **Power method as cross-check:** if Shin and power disagree by >1pp on a match it's logged as an *unbalanced line — review manually* (~3.5% of club matches; lines are written to `results/flagged_odds.csv`). The real 2026 odds are liquid → none flagged.
 - **Dynamic α by confederation** (`--dynamic-alpha`, **experimental, OFF by default**): nudges the model weight up when a CONCACAF/CAF/AFC/OFC side meets a UEFA/CONMEBOL one (documented market eurocentrism), down for UEFA-vs-CONMEBOL. **Cannot be backtested** (no historical WC odds) and the confederation feature already measured neutral, so it stays opt-in and never enters production.
 - **Multi-book log-consensus** (`logit_consensus`) implemented and ready, but we only have one consensus line per match today, so it isn't validated — wire it when per-bookmaker odds (e.g. Pinnacle) exist.
@@ -529,7 +545,7 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 | 19/06 | C | Brasil – Haití | 3-0 | 3-0 | ✅ 5 |
 | 19/06 | D | Turquía – Paraguay | 1-0 | 0-1 | ❌ 0 |
 | 20/06 | F | Países Bajos – Suecia | 2-0 | 5-1 | ✅ 3 |
-| 20/06 | E | Alemania – Costa de Marfil | 2-0 |   |   |
+| 20/06 | E | Alemania – Costa de Marfil | 2-0 | 2-1 | ✅ 3 |
 | 20/06 | E | Ecuador – Curazao | 3-0 |   |   |
 | 21/06 | F | Túnez – Japón | 0-1 |   |   |
 | 21/06 | H | España – Arabia S. | 3-0 |   |   |

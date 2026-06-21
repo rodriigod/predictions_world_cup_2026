@@ -23,14 +23,14 @@ sys.path.insert(0, str(ROOT))
 import numpy as np
 import pandas as pd
 
-from src.data.historical import (WC_BACKTEST_YEARS, WC_START,
+from core.data.historical import (WC_BACKTEST_YEARS, WC_START,
                                  build_historical_dataset, wc_backtest_rows)
-from src.data.wc_schema import match_features_frame
-from src.models.poisson_goals import PoissonGoalsModel
-from src.models.result_classifier import _make_models
-from src.models.stacked_classifier import StackedResultClassifier
-from src.simulation.monte_carlo import _dixon_coles_matrix
-from src.utils.metrics import ModelMetrics
+from core.data.wc_schema import match_features_frame
+from core.models.poisson_goals import PoissonGoalsModel
+from core.models.result_classifier import _make_models
+from core.models.stacked_classifier import StackedResultClassifier
+from core.simulation.monte_carlo import _dixon_coles_matrix
+from core.utils.metrics import ModelMetrics
 
 CLASSES = ["1", "X", "2"]          # orden de las columnas de probabilidad
 IDX = {c: i for i, c in enumerate(CLASSES)}

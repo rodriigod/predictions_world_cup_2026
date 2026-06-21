@@ -16,10 +16,10 @@ sys.path.insert(0, str(ROOT))
 
 import numpy as np
 
-from src.data.historical import build_historical_dataset
-from src.models.poisson_goals import PoissonGoalsModel
-from src.simulation.monte_carlo import _dixon_coles_matrix
-from src.utils.metrics import ModelMetrics
+from core.data.historical import build_historical_dataset
+from core.models.poisson_goals import PoissonGoalsModel
+from core.simulation.monte_carlo import _dixon_coles_matrix
+from core.utils.metrics import ModelMetrics
 
 CLASSES = ["1", "X", "2"]
 IDX = {c: i for i, c in enumerate(CLASSES)}

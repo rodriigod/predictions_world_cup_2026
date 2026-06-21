@@ -18,8 +18,8 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, TimeSeriesSplit
 
-from src.data.wc_schema import FEATURE_NAMES
-from src.models.result_classifier import CLASSES, _make_models
+from core.data.wc_schema import FEATURE_NAMES
+from core.models.result_classifier import CLASSES, _make_models
 
 _LABEL = {c: i for i, c in enumerate(CLASSES)}   # "1"->0, "2"->1, "X"->2
 

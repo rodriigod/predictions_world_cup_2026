@@ -19,11 +19,11 @@ sys.path.insert(0, str(ROOT))
 
 import numpy as np
 
-from src.data.historical import build_historical_dataset
-from src.data.wc_schema import FEATURE_NAMES
-from src.models.poisson_goals import PoissonGoalsModel
-from src.simulation.monte_carlo import _dixon_coles_matrix
-from src.tuning.optuna_tuner import (LABEL, default_cv_rps, rps,
+from core.data.historical import build_historical_dataset
+from core.data.wc_schema import FEATURE_NAMES
+from core.models.poisson_goals import PoissonGoalsModel
+from core.simulation.monte_carlo import _dixon_coles_matrix
+from core.tuning.optuna_tuner import (LABEL, default_cv_rps, rps,
                                      tune_classifier)
 
 CUTOFF = "2026-06-01"   # excluye el Mundial 2026 (fixture sin resultado igual)

@@ -19,16 +19,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.simulation.match_engine import (POSITION_KEYS, Squad,
+from core.simulation.match_engine import (POSITION_KEYS, Squad,
                                          blend_predictions, simulate_match)
 
 
 def _stats_fn(source: str):
     """Selecciona la fuente de stats por jugador."""
     if source == "fifa":
-        from src.data.fifa_ratings import get_squad_stats_fifa
+        from core.data.fifa_ratings import get_squad_stats_fifa
         return lambda lineup, delay: get_squad_stats_fifa(lineup)
-    from src.data.fbref_scraper import get_squad_stats
+    from core.data.fbref_scraper import get_squad_stats
     return get_squad_stats
 
 PRED_CSV = ROOT / "files/f3_output/match_predictions.csv"

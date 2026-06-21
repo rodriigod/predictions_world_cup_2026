@@ -10,11 +10,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.data.synthetic import make_training_data
-from src.data.wc_schema import FEATURE_NAMES
-from src.models.poisson_goals import PoissonGoalsModel
-from src.simulation import GroupStageSimulator
-from src.simulation.monte_carlo import (_demargin, _dixon_coles_matrix,
+from core.data.synthetic import make_training_data
+from core.data.wc_schema import FEATURE_NAMES
+from core.models.poisson_goals import PoissonGoalsModel
+from core.simulation import GroupStageSimulator
+from core.simulation.monte_carlo import (_demargin, _dixon_coles_matrix,
                                         blend_with_market, dc_1x2,
                                         lambdas_from_1x2)
 
@@ -68,7 +68,7 @@ def test_dixon_coles_matrix_is_distribution():
 
 def test_lambda_monotonic_in_strength(model, teams):
     """Un equipo fuerte vs débil debe tener lambda mayor que el inverso."""
-    from src.data.wc_schema import build_match_features, match_features_frame
+    from core.data.wc_schema import build_match_features, match_features_frame
     spain = teams[teams.team == "España"].iloc[0]
     cpv = teams[teams.team == "Cabo Verde"].iloc[0]
     X = match_features_frame([
@@ -81,7 +81,7 @@ def test_lambda_monotonic_in_strength(model, teams):
 
 def test_historical_dataset_and_fixed_results(teams, fixtures):
     """Dataset real: integridad básica + partidos jugados quedan fijos."""
-    from src.data.historical import (build_historical_dataset,
+    from core.data.historical import (build_historical_dataset,
                                      played_results_es,
                                      teams_table_from_history)
     data = build_historical_dataset()
@@ -124,7 +124,7 @@ def test_blend_with_market_alpha_extremes():
     odds = pd.DataFrame([{
         "home_team": "A", "away_team": "B",
         "odds_home": 3.0, "odds_draw": 3.0, "odds_away": 2.3}])
-    from src.data.odds_tools import demargin_shin
+    from core.data.odds_tools import demargin_shin
     mkt = demargin_shin((3.0, 3.0, 2.3))   # blend usa Shin como des-margining
     only_model = blend_with_market(model_probs, odds, alpha=1.0)
     only_market = blend_with_market(model_probs, odds, alpha=0.0)
@@ -142,7 +142,7 @@ def test_blend_with_market_alpha_extremes():
 def test_match_engine_micro_and_blend():
     """Motor pre-partido (V3): probabilidades válidas, equipo fuerte favorito,
     blend en log-odds que suma 1 y respeta los extremos de alpha."""
-    from src.simulation.match_engine import (Player, Squad, blend_predictions,
+    from core.simulation.match_engine import (Player, Squad, blend_predictions,
                                              simulate_match)
 
     def squad(name, atk):

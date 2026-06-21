@@ -20,9 +20,9 @@ sys.path.insert(0, str(ROOT))
 
 import pandas as pd
 
-from src.data.wc_schema import TEAM_COLUMNS, schema_as_dataframe
-from src.models.poisson_goals import PoissonGoalsModel
-from src.simulation import (GroupStageSimulator, console_summary,
+from core.data.wc_schema import TEAM_COLUMNS, schema_as_dataframe
+from core.models.poisson_goals import PoissonGoalsModel
+from core.simulation import (GroupStageSimulator, console_summary,
                             full_report, polla_sheet)
 
 
@@ -77,7 +77,7 @@ def main() -> None:
 
     # ---- 1. Datos de entrenamiento ----
     if args.train == "historical":
-        from src.data.historical import (build_historical_dataset,
+        from core.data.historical import (build_historical_dataset,
                                          played_results_es,
                                          teams_table_from_history)
         cutoff = None if args.cutoff.lower() == "none" else args.cutoff
@@ -98,7 +98,7 @@ def main() -> None:
             for p in played.itertuples():
                 print(f"        {p.team_a} {p.goals_a}-{p.goals_b} {p.team_b}")
     else:
-        from src.data.synthetic import make_training_data
+        from core.data.synthetic import make_training_data
         print("[1/5] Generando datos de entrenamiento sintéticos...")
         X, y = make_training_data(n_matches=8000, seed=args.seed)
         w = None
@@ -114,9 +114,9 @@ def main() -> None:
 
     # ---- 3. Clasificador 1X2 + stacking (verificación estilo ML moderno) ----
     if not args.no_classifier and args.train == "historical":
-        from src.models.result_classifier import ResultClassifier
-        from src.models.stacked_classifier import StackedResultClassifier
-        from src.data.wc_schema import build_match_features, match_features_frame
+        from core.models.result_classifier import ResultClassifier
+        from core.models.stacked_classifier import StackedResultClassifier
+        from core.data.wc_schema import build_match_features, match_features_frame
         print("[3/5] Entrenando clasificador 1X2 "
               "(XGBoost vs RF vs logística baseline) + STACKING...")
         clf = ResultClassifier(random_state=args.seed)
@@ -179,7 +179,7 @@ def main() -> None:
     polla_path.write_text(polla_sheet(match_results), encoding="utf-8")
 
     # torneo determinista completo (camino más probable, con goles)
-    from src.simulation.knockout import deterministic_tournament
+    from core.simulation.knockout import deterministic_tournament
     tour = deterministic_tournament(sim, match_results, standings)
     bracket_path = report_dir / "torneo_completo.md"
     bracket_path.write_text(

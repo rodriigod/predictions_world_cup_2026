@@ -22,7 +22,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.data.wc_schema import FEATURE_NAMES
+from core.data.wc_schema import FEATURE_NAMES
 
 LAMBDA_FLOOR, LAMBDA_CEIL = 0.15, 4.5  # límites sanos para selecciones
 

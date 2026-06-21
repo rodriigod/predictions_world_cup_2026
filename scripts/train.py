@@ -14,9 +14,9 @@ from sklearn.model_selection import train_test_split
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.data import DataLoader
-from src.models import BaselineModel, AdvancedModels
-from src.utils import ModelMetrics
+from core.data import DataLoader
+from core.models import BaselineModel, AdvancedModels
+from core.utils import ModelMetrics
 from scripts.config import CONFIG, OUTPUT_PATH, MODELS_PATH, RANDOM_SEED
 
 

@@ -120,11 +120,11 @@ La literatura moderna usa las cuotas (Pinnacle/Bet365) como features de entrada:
 
 | Concepto (papers) | Estado | Dónde |
 |---|---|---|
-| Maher (1982): goles ~ Poisson(λ), fuerzas de ataque α y defensa β | ✅ | `src/models/poisson_goals.py` — el GLM con log-link generaliza a Maher: λ = exp(β·x) donde x incluye ataque propio (xG/goles a favor) y debilidad del rival. El ELO interno absorbe α·β. |
-| Dixon-Coles (1997), corrección 1: decaimiento temporal φ | ✅ | `src/data/historical.py` (`DECAY_HALF_LIFE_YEARS`) — peso `w = exp(-años/8) × peso_torneo` pasado como `sample_weight` al modelo. |
-| Dixon-Coles (1997), corrección 2: ajuste τ de marcadores bajos (0-0, 1-0, 0-1, 1-1) | ✅ | `src/simulation/monte_carlo.py` (`_dixon_coles_matrix`, ρ=-0.08). |
-| ML moderno: clasificación multiclase [1, X, 2] | ✅ | `src/models/result_classifier.py` — XGBoost (multi:softprob), Random Forest y Regresión Logística Multinomial como baseline; se compara log-loss/accuracy en holdout. |
-| Medias móviles de forma (pts, goles, xG últimos 3/5/10) | ✅ | `src/data/historical.py` — forma últimos 5, goles a favor/en contra últimos 10 (proxy de xG), anti-leakage (solo partidos anteriores). |
+| Maher (1982): goles ~ Poisson(λ), fuerzas de ataque α y defensa β | ✅ | `core/models/poisson_goals.py` — el GLM con log-link generaliza a Maher: λ = exp(β·x) donde x incluye ataque propio (xG/goles a favor) y debilidad del rival. El ELO interno absorbe α·β. |
+| Dixon-Coles (1997), corrección 1: decaimiento temporal φ | ✅ | `core/data/historical.py` (`DECAY_HALF_LIFE_YEARS`) — peso `w = exp(-años/8) × peso_torneo` pasado como `sample_weight` al modelo. |
+| Dixon-Coles (1997), corrección 2: ajuste τ de marcadores bajos (0-0, 1-0, 0-1, 1-1) | ✅ | `core/simulation/monte_carlo.py` (`_dixon_coles_matrix`, ρ=-0.08). |
+| ML moderno: clasificación multiclase [1, X, 2] | ✅ | `core/models/result_classifier.py` — XGBoost (multi:softprob), Random Forest y Regresión Logística Multinomial como baseline; se compara log-loss/accuracy en holdout. |
+| Medias móviles de forma (pts, goles, xG últimos 3/5/10) | ✅ | `core/data/historical.py` — forma últimos 5, goles a favor/en contra últimos 10 (proxy de xG), anti-leakage (solo partidos anteriores). |
 | Diferencia de ELO como feature top | ✅ | `elo_diff_scaled` + `elo_win_expectancy`; ELO propio calculado partido a partido con K por torneo y bonus de localía. |
 | Efecto localía | ✅ | `is_host_own/opp` + bonus de 100 ELO para el local en el cálculo histórico. |
 | Días de descanso | ✅ | `rest_days_diff` calculado de fechas reales (histórico y fixture 2026). |

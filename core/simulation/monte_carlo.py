@@ -25,8 +25,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.data.odds_tools import demargin_shin, power_vs_shin_gap
-from src.data.wc_schema import build_match_features, match_features_frame
+from core.data.odds_tools import demargin_shin, power_vs_shin_gap
+from core.data.wc_schema import build_match_features, match_features_frame
 
 MAX_GOALS = 9          # truncamiento de la matriz de marcadores
 DC_RHO = -0.08         # corrección Dixon-Coles para 0-0/1-1 (nota #4)

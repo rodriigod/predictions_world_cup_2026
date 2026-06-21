@@ -174,7 +174,7 @@ def get_squad_stats(lineup: list, delay: float = 6.0) -> list:
     1) las que vengan EN EL JSON del jugador (manuales, evitan el scraper),
     2) FBref (si responde — suele dar 403),
     3) defaults por posición (fallback)."""
-    from src.simulation.match_engine import Player
+    from core.simulation.match_engine import Player
     n_manual = sum(1 for p in lineup if any(k in p for k in STAT_FIELDS))
     print(f"\nStats de {len(lineup)} jugadores ({n_manual} manuales en el JSON, "
           f"resto vía FBref ~{delay:.0f}s c/u la 1ª vez)...")

@@ -34,7 +34,7 @@ sys.path.insert(0, str(ROOT))
 
 import pandas as pd
 
-from src.data.historical import NAME_MAP   # español(polla) -> inglés(dataset)
+from core.data.historical import NAME_MAP   # español(polla) -> inglés(dataset)
 
 OUT = ROOT / "files/f0_raw/odds_2026.csv"
 FIXTURES = ROOT / "files/f0_raw/fixtures_2026.csv"

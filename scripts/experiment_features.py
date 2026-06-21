@@ -22,13 +22,13 @@ sys.path.insert(0, str(ROOT))
 import numpy as np
 import pandas as pd
 
-from src.data.historical import (WC_BACKTEST_YEARS, WC_START,
+from core.data.historical import (WC_BACKTEST_YEARS, WC_START,
                                  build_historical_dataset, wc_backtest_rows)
-from src.data.wc_schema import (FEATURE_NAMES, CANDIDATE_NAMES,
+from core.data.wc_schema import (FEATURE_NAMES, CANDIDATE_NAMES,
                                 match_features_frame)
-from src.models.poisson_goals import PoissonGoalsModel
-from src.simulation.monte_carlo import _dixon_coles_matrix
-from src.utils.metrics import ModelMetrics
+from core.models.poisson_goals import PoissonGoalsModel
+from core.simulation.monte_carlo import _dixon_coles_matrix
+from core.utils.metrics import ModelMetrics
 
 CLASSES = ["1", "X", "2"]
 IDX = {c: i for i, c in enumerate(CLASSES)}

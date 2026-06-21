@@ -21,11 +21,11 @@ sys.path.insert(0, str(ROOT))
 
 import numpy as np
 
-from src.data.historical import (NAME_MAP, _neutral_series,
+from core.data.historical import (NAME_MAP, _neutral_series,
                                  build_historical_dataset)
-from src.data.wc_schema import build_match_features, match_features_frame
-from src.models.poisson_goals import PoissonGoalsModel
-from src.simulation.monte_carlo import dc_1x2
+from core.data.wc_schema import build_match_features, match_features_frame
+from core.models.poisson_goals import PoissonGoalsModel
+from core.simulation.monte_carlo import dc_1x2
 
 
 def resolve_team(name: str, snapshots: dict) -> str | None:
@@ -85,7 +85,7 @@ def predict(team_a, team_b, home="neutral"):
 def evaluate(test_from="2022-01-01"):
     """¿Sirve? Entrena con partidos previos a `test_from`, predice los
     posteriores (todos los internacionales), mide accuracy/RPS leak-free."""
-    from src.utils.metrics import ModelMetrics
+    from core.utils.metrics import ModelMetrics
     import pandas as pd
     print(f"Evaluación general (holdout internacional ≥ {test_from})...")
     data = build_historical_dataset()           # todo

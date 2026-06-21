@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from src.data.wc_schema import build_match_features, match_features_frame
+from core.data.wc_schema import build_match_features, match_features_frame
 
 # (match_id, slot_a, slot_b, fecha) — slots: 1A/2A, 3XXXXX, W##/L##
 ROUND_OF_32 = [

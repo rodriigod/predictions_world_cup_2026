@@ -11,7 +11,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.data import DataLoader, DataPreprocessor
+from core.data import DataLoader, DataPreprocessor
 from scripts.config import CONFIG, DATA_PATH, OUTPUT_PATH
 
 

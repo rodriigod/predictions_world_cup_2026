@@ -100,8 +100,8 @@ def get_player_stats(name: str, position: str) -> dict:
 def get_squad_stats_fifa(lineup: list) -> list:
     """[Player] con stats FIFA. Prioridad: stats manuales del JSON > FIFA >
     defaults por posición (mismo contrato que fbref_scraper.get_squad_stats)."""
-    from src.simulation.match_engine import Player
-    from src.data.fbref_scraper import STAT_FIELDS
+    from core.simulation.match_engine import Player
+    from core.data.fbref_scraper import STAT_FIELDS
     by_name = _load()
     found = sum(1 for p in lineup if _norm(p["name"]) in by_name
                 or _norm(p["name"]).split()[-1] in _CACHE["by_last"])
