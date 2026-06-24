@@ -189,6 +189,28 @@ def dc_1x2(lam_a: float, lam_b: float, rho: float = DC_RHO
             float(np.triu(m, 1).sum()))
 
 
+def consistent_modal_score(score_matrix, p_home: float, p_draw: float,
+                           p_away: float) -> tuple[int, int]:
+    """Marcador modal CONSISTENTE con el resultado 1X2 más probable.
+
+    Problema del argmax global: para equipos parejos y de pocos goles, la casilla
+    individual más probable casi siempre es un empate (0-0/1-1) aunque la prob.
+    ACUMULADA favorezca a un ganador -> se predice "empate" en goles mientras el
+    1X2 dice "gana X". Aquí se fija PRIMERO el resultado (argmax de [1,X,2]) y
+    dentro de esa región (i>j, i==j o i<j) se toma el marcador más probable.
+
+    Esto MAXIMIZA los puntos esperados en pollas 5/3/0: E[pts]=3·P(resultado)+
+    2·P(exacto), dominado por el resultado -> conviene un marcador cuyo resultado
+    sea el más probable. Devuelve (goles_local, goles_visita)."""
+    m = np.asarray(score_matrix, float)
+    outcome = int(np.argmax([p_home, p_draw, p_away]))   # 0=local,1=empate,2=visita
+    ii, jj = np.indices(m.shape)
+    region = (ii > jj) if outcome == 0 else (ii == jj) if outcome == 1 else (ii < jj)
+    masked = np.where(region, m, -1.0)
+    i, j = np.unravel_index(int(np.argmax(masked)), m.shape)
+    return int(i), int(j)
+
+
 @dataclass
 class _Standing:
     points: int = 0

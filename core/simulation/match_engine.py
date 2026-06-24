@@ -140,8 +140,25 @@ def simulate_match(squad_home: Squad, squad_away: Squad, n_sims: int = 5000,
         "mean_goals_home": round(float(gh.mean()), 3),
         "mean_goals_away": round(float(ga.mean()), 3),
         "score_matrix": score_matrix,
-        "most_likely_score": max(score_matrix, key=score_matrix.get),
+        "most_likely_score": _consistent_modal(score_matrix,
+                                               p_home, p_draw, p_away),
     }
+
+
+def _consistent_modal(score_matrix: dict, p_home: float, p_draw: float,
+                      p_away: float) -> tuple:
+    """Marcador modal CONSISTENTE con el 1X2 (mismo criterio que
+    monte_carlo.consistent_modal_score, pero sobre el dict de marcadores
+    simulados): fija el resultado más probable y dentro de él toma el marcador
+    más frecuente, evitando el empate fantasma."""
+    outcome = int(np.argmax([p_home, p_draw, p_away]))   # 0 local,1 empate,2 visita
+    def matches(k):
+        gh, ga = k
+        o = 0 if gh > ga else (1 if gh == ga else 2)
+        return o == outcome
+    cand = {k: v for k, v in score_matrix.items() if matches(k)}
+    pool = cand or score_matrix
+    return max(pool, key=pool.get)
 
 
 def blend_predictions(p_statistical, p_micro, alpha: float = 0.65,

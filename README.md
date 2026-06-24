@@ -204,9 +204,22 @@ core/                    # ⭐ PRODUCTION pipeline — Poisson GLM + Dixon-Coles
     ├── knockout.py       # 2026 bracket, third-place allocation, deterministic run
     └── report.py         # markdown/console reports
 
-microsim/                # 🚧 (empty) future squad-level micro-simulation model
-llm_features/            # 🚧 (empty) future LLM-derived signals / model
-ensemble/                # 🚧 (empty) combines MatchPredictions from all models
+microsim/                # squad-STRENGTH micro-sim (market value -> attack/defence -> MC)
+├── ingest.py            #   squad market values: respectful Transfermarkt scraper +
+│                        #   FotMob stub + always-on offline fallback (teams_2026.csv)
+├── strength.py          #   position-weighted offensive/defensive strength indices
+└── model.py             #   MarketValueMicroSim -> MatchPrediction (Dixon-Coles MC)
+llm_features/            # STRUCTURED match signals from an LLM + web search (NOT predictions)
+├── schema.py            #   MatchFeatures: injuries, coach change, expert consensus,
+│                        #   dead rubber, travel fatigue — every field nullable
+├── cache.py             #   aggressive per-match disk cache (no repeated searches)
+└── extract.py           #   get_match_features(home, away, date); LM Studio+DDG / Gemini
+ensemble/                # STACKING of core + microsim + llm via a logistic meta-model
+├── roster.py            #   roster validation of LLM names (Transfermarkt/FIFA) + discard log
+├── features.py          #   meta feature row (stacked probs + LLM signal columns)
+├── dataset.py           #   backtest training set (core real + microsim retroactive)
+├── meta_model.py        #   multinomial logistic L2, C via TimeSeriesSplit (RPS)
+└── predict.py           #   predict_final(home, away, date) -> MatchPrediction
 scripts/
 ├── update_team_data.py   # refresh ELO (live) + market values
 ├── fetch_odds_2026.py        # download/prepare bookmaker 1X2 odds for the blend
@@ -230,6 +243,31 @@ scripts/
 └── analyze_probabilities.py  # probability/team pattern analysis (2010-2024)
 files/f0_raw/             # datasets (results, teams, fixtures)
 ```
+
+### 🧩 Two new models (`microsim/`, `llm_features/`) — honest scope
+
+Both speak the common contract and stay out of the production pipeline; they exist to feed the future `ensemble/`.
+
+**`microsim/` — squad-strength micro-sim (market value as a quality proxy).** It loads each squad's market value, splits it into **offensive vs defensive** strength weighting by position (a star forward feeds attack, a backup full-back barely moves either index), maps the two indices to λ with the classic **Maher α·β** structure, and Monte-Carlo-samples scorelines through `core/`'s Dixon-Coles matrix → a `MatchPrediction`. Quick use:
+
+```python
+import pandas as pd
+from microsim import MarketValueMicroSim
+teams = pd.read_csv("files/f0_raw/teams_2026.csv")
+sim = MarketValueMicroSim.from_teams(teams)                 # offline by default
+pred = sim.predict_match("Brasil", "Argentina", "2026-06-20")
+```
+
+> ⚠️ **How strong is this, honestly?** It is **not** a player-by-player, video-game micro-simulation — it simulates no passes, positions or events. It is a **squad-strength** model that uses **market value as a proxy for quality**. Market value correlates with skill but carries well-known biases: it **undervalues players from minor leagues and non-top-5-league nations**, and it **lags behind current form and injuries**. Worse, the default path uses **synthetic squads** — the team's *total* `market_value_meur` (which itself comes from Transfermarkt; one number per team) split across a *canonical* position template, **not** a real player-by-player list. Consequence: with only the total, a team's attack and defence indices move together (a rich squad looks strong both ways). The per-position machinery only bites when **real per-player data** is supplied. **Transfermarkt is not reliably scrapable** (403 to non-browser clients, shifting HTML) — `ingest.py` ships a *respectful* scraper (real UA, rate-limiting, disk cache, back-off) and a **FotMob** entry point, but both are best-effort and degrade to the offline fallback. Treat this model as a **cheap second opinion** for the ensemble, not as simulation truth. (Consistent with every prior ensemble test in this repo, it is unlikely to beat the market-blended production model on its own — see the micro-sim results above.)
+
+**`llm_features/` — structured signals from an LLM + web search (never predictions).** For each match it extracts **objective, verifiable facts** via real web search — key injuries, recent coach change (≤3 months), published expert-consensus %, dead-rubber status, travel fatigue (km / time zones) — as a strict JSON schema. The LLM is explicitly forbidden from predicting the result, and **any field it can't confirm stays `null` (never fabricated)**. Searches are **cached aggressively** to disk per match.
+
+```python
+from llm_features import get_match_features
+feats = get_match_features("Brasil", "Argentina", "2026-06-20")   # dict; cached
+```
+
+> ⚠️ **Honesty & limits.** Web search runs through **Gemini's `google_search` grounding** (the same pattern as `scripts/match_dossier.py`, free tier, `GEMINI_API_KEY`); the provider is pluggable (any `callable(prompt)->str`). **Without a key or network it returns an all-`null` skeleton** — and a null result is *not* cached, so a transient failure never gets frozen as "no data". The LLM can still mis-read a source; the structured fields are **inputs to verify**, not ground truth, and the `consenso_expertos` figure is only as good as the published predictions the model finds. These columns are wired for the ensemble but **not yet validated** to improve any metric.
 
 ---
 
@@ -546,8 +584,8 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 | 19/06 | D | Turquía – Paraguay | 1-0 | 0-1 | ❌ 0 |
 | 20/06 | F | Países Bajos – Suecia | 2-0 | 5-1 | ✅ 3 |
 | 20/06 | E | Alemania – Costa de Marfil | 2-0 | 2-1 | ✅ 3 |
-| 20/06 | E | Ecuador – Curazao | 3-0 |   |   |
-| 21/06 | F | Túnez – Japón | 0-1 |   |   |
+| 20/06 | E | Ecuador – Curazao | 3-0 | 0-0 | ❌ 0 |
+| 21/06 | F | Túnez – Japón | 0-1 | 0-4 | ✅ 3 |
 | 21/06 | H | España – Arabia S. | 3-0 |   |   |
 | 21/06 | G | Bélgica – Irán | 2-0 |   |   |
 | 21/06 | H | Uruguay – Cabo Verde | 1-0 |   |   |
@@ -598,3 +636,140 @@ Table: **Inglaterra 9** · **Croacia 6** · **Panamá 3 ✦** · Ghana 0
 - To re-predict mid-tournament with played matches locked in: refresh the results dataset and run with `--cutoff none`.
 
 *Built with scikit-learn, XGBoost, pandas, Optuna and 50,000 parallel universes.* 🎲
+
+---
+
+<!-- VALIDACION_ONLINE_START -->
+## 📊 Modelos SIN datos vs CON datos (online learning)
+
+El sistema corre en **dos regímenes**:
+- **SIN datos** — ratings **pre-torneo** (core, microsim, ensemble; el LLM entra dentro del ensemble). Es la predicción de producción.
+- **CON datos** — los **mismos** modelos pero con los ratings **re-estimados con los resultados reales** del Mundial a medida que se juegan (módulo `online_learning/`, en paralelo, sin tocar producción).
+
+### Validación sobre 36 partidos jugados (✅ resultado · 🎯 exacto · ❌ falló)
+
+| Partido | Real | core·sin | core·con | micro·sin | micro·con | ens·sin | ens·con |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| México – Sudáfrica | 2-0 | 2-0 🎯 | 2-0 🎯 | 2-0 🎯 | 3-0 ✅ | 3-1 ✅ | 3-1 ✅ |
+| Corea del Sur – Rep. Checa | 2-1 | 1-0 ✅ | 1-0 ✅ | 1-0 ✅ | 1-0 ✅ | 2-1 🎯 | 2-1 🎯 |
+| Canadá – Bosnia y Her. | 1-1 | 2-0 ❌ | 2-0 ❌ | 2-0 ❌ | 2-0 ❌ | 2-1 ❌ | 3-1 ❌ |
+| Suiza – Catar | 1-1 | 3-0 ❌ | 3-0 ❌ | 3-0 ❌ | 3-0 ❌ | 4-1 ❌ | 4-1 ❌ |
+| Brasil – Marruecos | 1-1 | 1-0 ❌ | 1-0 ❌ | 2-1 ❌ | 2-1 ❌ | 1-0 ❌ | 1-0 ❌ |
+| Escocia – Haití | 1-0 | 1-0 🎯 | 1-0 🎯 | 1-0 🎯 | 2-0 ✅ | 2-1 ✅ | 2-1 ✅ |
+| EEUU – Paraguay | 4-1 | 1-0 ✅ | 1-0 ✅ | 0-1 ❌ | 1-2 ❌ | 1-0 ✅ | 1-0 ✅ |
+| Australia – Turquía | 2-0 | 0-1 ❌ | 1-0 ✅ | 1-2 ❌ | 1-2 ❌ | 0-1 ❌ | 1-0 ✅ |
+| Alemania – Curazao | 7-1 | 2-0 ✅ | 2-0 ✅ | 3-0 ✅ | 3-0 ✅ | 4-1 ✅ | 4-1 ✅ |
+| Costa de Marfil – Ecuador | 1-0 | 0-1 ❌ | 0-1 ❌ | 0-2 ❌ | 0-2 ❌ | 0-1 ❌ | 0-1 ❌ |
+| Países Bajos – Japón | 2-2 | 1-0 ❌ | 1-0 ❌ | 1-2 ❌ | 1-2 ❌ | 1-0 ❌ | 1-0 ❌ |
+| Suecia – Túnez | 5-1 | 1-0 ✅ | 2-1 ✅ | 2-1 ✅ | 2-1 ✅ | 1-0 ✅ | 2-1 ✅ |
+| Bélgica – Egipto | 1-1 | 1-0 ❌ | 1-0 ❌ | 2-0 ❌ | 2-0 ❌ | 2-1 ❌ | 2-1 ❌ |
+| Irán – Nueva Zelanda | 2-2 | 1-0 ❌ | 1-0 ❌ | 2-0 ❌ | 2-0 ❌ | 2-1 ❌ | 2-1 ❌ |
+| España – Cabo Verde | 0-0 | 2-0 ❌ | 2-0 ❌ | 3-0 ❌ | 3-0 ❌ | 4-1 ❌ | 4-1 ❌ |
+| Arabia S. – Uruguay | 1-1 | 0-1 ❌ | 0-1 ❌ | 0-2 ❌ | 0-2 ❌ | 0-2 ❌ | 0-2 ❌ |
+| Francia – Senegal | 3-1 | 1-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-1 ✅ | 2-1 ✅ |
+| Noruega – Irak | 4-1 | 2-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-1 ✅ | 2-1 ✅ |
+| Argentina – Argelia | 3-0 | 1-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-1 ✅ | 2-1 ✅ |
+| Austria – Jordania | 3-1 | 1-0 ✅ | 1-0 ✅ | 1-0 ✅ | 1-0 ✅ | 2-1 ✅ | 2-1 ✅ |
+| Portugal – RD Congo | 1-1 | 1-0 ❌ | 1-0 ❌ | 2-0 ❌ | 2-0 ❌ | 2-1 ❌ | 2-1 ❌ |
+| Colombia – Uzbekistán | 3-1 | 1-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-1 ✅ | 2-1 ✅ |
+| Inglaterra – Croacia | 4-2 | 1-0 ✅ | 1-0 ✅ | 1-0 ✅ | 2-0 ✅ | 1-0 ✅ | 2-1 ✅ |
+| Ghana – Panamá | 1-0 | 0-1 ❌ | 0-1 ❌ | 0-2 ❌ | 0-2 ❌ | 1-2 ❌ | 0-1 ❌ |
+| Rep. Checa – Sudáfrica | 1-1 | 1-0 ❌ | 1-0 ❌ | 2-0 ❌ | 1-0 ❌ | 2-1 ❌ | 2-1 ❌ |
+| Suiza – Bosnia y Her. | 4-1 | 2-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-0 ✅ | 3-1 ✅ | 3-1 ✅ |
+| Canadá – Catar | 6-0 | 2-0 ✅ | 2-0 ✅ | 3-0 ✅ | 3-0 ✅ | 4-1 ✅ | 4-1 ✅ |
+| México – Corea del Sur | 1-0 | 1-0 🎯 | 1-0 🎯 | 1-0 🎯 | 1-0 🎯 | 1-0 🎯 | 1-0 🎯 |
+| EEUU – Australia | 2-0 | 1-0 ✅ | 1-0 ✅ | 0-1 ❌ | 1-2 ❌ | 0-1 ❌ | 1-0 ✅ |
+| Escocia – Marruecos | 0-1 | 0-1 🎯 | 0-1 🎯 | 0-2 ✅ | 0-2 ✅ | 0-1 🎯 | 0-1 🎯 |
+| Brasil – Haití | 3-0 | 2-0 ✅ | 2-0 ✅ | 3-0 🎯 | 3-0 🎯 | 3-1 ✅ | 3-1 ✅ |
+| Turquía – Paraguay | 0-1 | 1-0 ❌ | 0-1 🎯 | 2-1 ❌ | 2-1 ❌ | 1-0 ❌ | 0-1 🎯 |
+| Países Bajos – Suecia | 5-1 | 2-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-1 ✅ | 3-1 ✅ |
+| Alemania – Costa de Marfil | 2-1 | 1-0 ✅ | 1-0 ✅ | 2-0 ✅ | 2-0 ✅ | 2-1 🎯 | 2-1 🎯 |
+| Ecuador – Curazao | 0-0 | 2-0 ❌ | 2-0 ❌ | 3-0 ❌ | 3-0 ❌ | 3-1 ❌ | 3-1 ❌ |
+| Túnez – Japón | 0-4 | 0-1 ✅ | 0-2 ✅ | 0-2 ✅ | 0-2 ✅ | 0-2 ✅ | 1-2 ✅ |
+| **Aciertos resultado** | **/36** | **21/36** | **23/36** | **19/36** | **19/36** | **20/36** | **23/36** |
+| Marcador exacto 🎯 |  | 4 | 5 | 4 | 2 | 4 | 5 |
+
+### Predicciones de los modelos CON DATOS (partidos jugados)
+
+| Partido | Real | core·con | micro·con | ens·con |
+|---|:-:|:-:|:-:|:-:|
+| México – Sudáfrica | 2-0 | 78/16/6 2-0 🎯 | 85/11/4 3-0 ✅ | 78/12/10 3-1 ✅ |
+| Corea del Sur – Rep. Checa | 2-1 | 47/27/26 1-0 ✅ | 54/25/21 1-0 ✅ | 48/26/26 2-1 🎯 |
+| Canadá – Bosnia y Her. | 1-1 | 75/18/7 2-0 ❌ | 76/16/8 2-0 ❌ | 75/14/11 3-1 ❌ |
+| Suiza – Catar | 1-1 | 86/10/4 3-0 ❌ | 90/8/3 3-0 ❌ | 83/9/8 4-1 ❌ |
+| Brasil – Marruecos | 1-1 | 44/29/27 1-0 ❌ | 45/27/28 2-1 ❌ | 44/29/27 1-0 ❌ |
+| Escocia – Haití | 1-0 | 54/26/20 1-0 🎯 | 58/24/18 2-0 ✅ | 54/24/21 2-1 ✅ |
+| EEUU – Paraguay | 4-1 | 47/28/26 1-0 ✅ | 28/27/44 1-2 ❌ | 44/30/27 1-0 ✅ |
+| Australia – Turquía | 2-0 | 39/30/32 1-0 ✅ | 35/28/37 1-2 ❌ | 38/30/32 1-0 ✅ |
+| Alemania – Curazao | 7-1 | 82/12/6 2-0 ✅ | 90/7/2 3-0 ✅ | 81/10/9 4-1 ✅ |
+| Costa de Marfil – Ecuador | 1-0 | 24/32/43 0-1 ❌ | 15/22/63 0-2 ❌ | 25/32/43 0-1 ❌ |
+| Países Bajos – Japón | 2-2 | 37/29/34 1-0 ❌ | 36/28/37 1-2 ❌ | 37/29/34 1-0 ❌ |
+| Suecia – Túnez | 5-1 | 47/25/28 2-1 ✅ | 42/27/31 2-1 ✅ | 46/26/28 2-1 ✅ |
+| Bélgica – Egipto | 1-1 | 54/27/19 1-0 ❌ | 61/23/16 2-0 ❌ | 55/25/21 2-1 ❌ |
+| Irán – Nueva Zelanda | 2-2 | 54/26/20 1-0 ❌ | 63/22/15 2-0 ❌ | 55/24/21 2-1 ❌ |
+| España – Cabo Verde | 0-0 | 81/14/5 2-0 ❌ | 92/6/1 3-0 ❌ | 81/10/9 4-1 ❌ |
+| Arabia S. – Uruguay | 1-1 | 14/26/60 0-1 ❌ | 8/16/76 0-2 ❌ | 18/24/58 0-2 ❌ |
+| Francia – Senegal | 3-1 | 60/24/16 2-0 ✅ | 73/18/10 2-0 ✅ | 62/20/17 2-1 ✅ |
+| Noruega – Irak | 4-1 | 72/19/9 2-0 ✅ | 74/17/9 2-0 ✅ | 72/15/12 2-1 ✅ |
+| Argentina – Argelia | 3-0 | 64/22/14 2-0 ✅ | 82/13/5 2-0 ✅ | 68/17/15 2-1 ✅ |
+| Austria – Jordania | 3-1 | 53/25/21 1-0 ✅ | 54/25/21 1-0 ✅ | 54/24/22 2-1 ✅ |
+| Portugal – RD Congo | 1-1 | 61/26/14 1-0 ❌ | 77/15/7 2-0 ❌ | 64/20/16 2-1 ❌ |
+| Colombia – Uzbekistán | 3-1 | 66/22/12 2-0 ✅ | 74/17/9 2-0 ✅ | 68/18/14 2-1 ✅ |
+| Inglaterra – Croacia | 4-2 | 57/25/18 1-0 ✅ | 58/24/18 2-0 ✅ | 57/23/20 2-1 ✅ |
+| Ghana – Panamá | 1-0 | 26/28/47 0-1 ❌ | 14/22/64 0-2 ❌ | 26/28/46 0-1 ❌ |
+| Rep. Checa – Sudáfrica | 1-1 | 51/27/22 1-0 ❌ | 56/25/20 1-0 ❌ | 52/25/23 2-1 ❌ |
+| Suiza – Bosnia y Her. | 4-1 | 73/18/9 2-0 ✅ | 81/13/6 2-0 ✅ | 74/14/12 3-1 ✅ |
+| Canadá – Catar | 6-0 | 87/10/3 2-0 ✅ | 86/10/4 3-0 ✅ | 84/9/8 4-1 ✅ |
+| México – Corea del Sur | 1-0 | 58/26/16 1-0 🎯 | 52/26/22 1-0 🎯 | 57/25/19 1-0 🎯 |
+| EEUU – Australia | 2-0 | 44/28/28 1-0 ✅ | 28/27/44 1-2 ❌ | 42/30/28 1-0 ✅ |
+| Escocia – Marruecos | 0-1 | 20/28/52 0-1 🎯 | 15/22/63 0-2 ✅ | 22/27/51 0-1 🎯 |
+| Brasil – Haití | 3-0 | 79/14/6 2-0 ✅ | 88/9/3 3-0 🎯 | 79/11/10 3-1 ✅ |
+| Turquía – Paraguay | 0-1 | 34/30/36 0-1 🎯 | 37/28/35 2-1 ❌ | 34/30/36 0-1 🎯 |
+| Países Bajos – Suecia | 5-1 | 71/17/12 2-0 ✅ | 75/17/9 2-0 ✅ | 72/15/13 3-1 ✅ |
+| Alemania – Costa de Marfil | 2-1 | 53/26/21 1-0 ✅ | 66/21/13 2-0 ✅ | 55/23/21 2-1 🎯 |
+| Ecuador – Curazao | 0-0 | 72/20/8 2-0 ❌ | 89/8/3 3-0 ❌ | 75/14/11 3-1 ❌ |
+| Túnez – Japón | 0-4 | 9/19/71 0-2 ✅ | 6/14/80 0-2 ✅ | 15/17/68 1-2 ✅ |
+
+### Predicciones de los PRÓXIMOS 36 partidos (marcador por modelo)
+
+| J | G | Partido | core·sin | core·con | micro·sin | micro·con | ens·sin | ens·con |
+|:-:|:-:|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| 2 | G | Bélgica – Irán | 1-0 | 1-0 | 2-1 | 2-1 | 1-0 | 1-0 |
+| 2 | G | Nueva Zelanda – Egipto | 0-1 | 0-1 | 1-2 | 1-2 | 0-1 | 0-1 |
+| 2 | H | España – Arabia S. | 2-0 | 2-0 | 3-0 | 3-0 | 4-1 | 3-1 |
+| 2 | H | Uruguay – Cabo Verde | 2-0 | 1-0 | 2-0 | 2-0 | 2-1 | 2-1 |
+| 2 | I | Francia – Irak | 2-0 | 2-0 | 3-0 | 3-0 | 3-1 | 3-1 |
+| 2 | I | Noruega – Senegal | 1-0 | 1-0 | 2-1 | 2-1 | 1-0 | 1-0 |
+| 2 | J | Argentina – Austria | 1-0 | 2-0 | 2-0 | 2-0 | 2-1 | 2-1 |
+| 2 | J | Jordania – Argelia | 1-2 | 1-2 | 0-1 | 0-1 | 1-2 | 1-2 |
+| 2 | K | Portugal – Uzbekistán | 1-0 | 1-0 | 2-0 | 2-0 | 2-1 | 2-1 |
+| 2 | K | Colombia – RD Congo | 1-0 | 1-0 | 2-0 | 2-0 | 2-1 | 2-1 |
+| 2 | L | Inglaterra – Ghana | 2-0 | 2-0 | 3-0 | 3-0 | 3-1 | 3-1 |
+| 2 | L | Panamá – Croacia | 1-2 | 1-2 | 0-1 | 0-2 | 1-2 | 1-2 |
+| 3 | A | Rep. Checa – México | 0-1 | 0-1 | 0-2 | 0-2 | 1-2 | 1-2 |
+| 3 | A | Sudáfrica – Corea del Sur | 0-1 | 0-1 | 0-2 | 0-2 | 1-2 | 1-2 |
+| 3 | B | Suiza – Canadá | 1-0 | 1-0 | 2-1 | 2-1 | 1-0 | 1-0 |
+| 3 | B | Bosnia y Her. – Catar | 1-0 | 1-0 | 1-0 | 1-0 | 1-0 | 2-1 |
+| 3 | C | Escocia – Brasil | 0-2 | 0-2 | 0-2 | 0-2 | 1-2 | 1-2 |
+| 3 | C | Marruecos – Haití | 2-0 | 2-0 | 2-0 | 2-0 | 2-1 | 2-1 |
+| 3 | D | Turquía – EEUU | 2-1 | 1-2 | 2-0 | 2-1 | 2-1 | 1-2 |
+| 3 | D | Paraguay – Australia | 0-1 | 0-1 | 1-2 | 1-2 | 0-1 | 0-1 |
+| 3 | E | Curazao – Costa de Marfil | 0-2 | 0-2 | 0-2 | 0-2 | 1-2 | 1-2 |
+| 3 | E | Ecuador – Alemania | 1-0 | 0-1 | 2-1 | 1-2 | 1-0 | 0-1 |
+| 3 | F | Japón – Suecia | 2-0 | 2-0 | 2-0 | 2-0 | 2-1 | 2-1 |
+| 3 | F | Túnez – Países Bajos | 0-1 | 0-2 | 0-2 | 0-2 | 1-2 | 1-3 |
+| 3 | G | Egipto – Irán | 0-1 | 0-1 | 0-1 | 0-1 | 0-1 | 0-1 |
+| 3 | G | Nueva Zelanda – Bélgica | 0-2 | 0-2 | 0-2 | 0-2 | 1-2 | 1-2 |
+| 3 | H | Cabo Verde – Arabia S. | 0-1 | 0-1 | 1-2 | 1-2 | 0-1 | 0-1 |
+| 3 | H | Uruguay – España | 0-1 | 0-1 | 0-2 | 0-2 | 0-1 | 0-1 |
+| 3 | I | Noruega – Francia | 0-1 | 1-2 | 0-2 | 0-2 | 0-1 | 0-1 |
+| 3 | I | Senegal – Irak | 1-0 | 1-0 | 2-0 | 2-0 | 2-1 | 2-1 |
+| 3 | J | Argelia – Austria | 1-0 | 1-0 | 2-1 | 1-2 | 1-0 | 1-0 |
+| 3 | J | Jordania – Argentina | 0-2 | 0-2 | 0-3 | 0-3 | 1-3 | 1-3 |
+| 3 | K | Colombia – Portugal | 1-0 | 1-0 | 2-1 | 2-1 | 1-0 | 1-0 |
+| 3 | K | RD Congo – Uzbekistán | 0-1 | 0-1 | 1-2 | 1-2 | 0-1 | 0-1 |
+| 3 | L | Panamá – Inglaterra | 0-2 | 0-2 | 0-2 | 0-2 | 1-2 | 1-3 |
+| 3 | L | Croacia – Ghana | 2-0 | 2-0 | 3-0 | 2-0 | 3-1 | 2-1 |
+
+_Detalle, 1X2 e imágenes por partido: `results/reports/validacion_modelos.md`, `proximos_partidos_predicciones.md` y `results/match_panels/`. 'con datos' en partidos jugados es in-sample._
+<!-- VALIDACION_ONLINE_END -->

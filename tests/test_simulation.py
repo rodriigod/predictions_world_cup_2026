@@ -181,3 +181,26 @@ def test_simulation_probabilities_consistent(model, teams, fixtures):
     # probabilidades 1X2 de cada partido suman 1
     probs = matches[["p_win_a", "p_draw", "p_win_b"]].sum(axis=1)
     assert np.allclose(probs, 1.0)
+
+
+def test_consistent_modal_score_matches_outcome():
+    """El marcador modal consistente debe coincidir con el resultado 1X2 más
+    probable (no caer en empate fantasma cuando el 1X2 favorece a un ganador)."""
+    from core.simulation.monte_carlo import consistent_modal_score
+
+    # equipos parejos, pocos goles: el argmax GLOBAL suele ser empate
+    la, lb = lambdas_from_1x2(0.25, 0.26, 0.49)      # favorece visita (2)
+    m = _dixon_coles_matrix(la, lb)
+    gi, gj = np.unravel_index(int(np.argmax(m)), m.shape)
+    assert gi == gj                                   # argmax global = empate
+
+    i, j = consistent_modal_score(m, 0.25, 0.26, 0.49)
+    assert i < j                                      # consistente = gana visita
+
+    # favoreciendo local -> i>j ; empate -> i==j
+    la, lb = lambdas_from_1x2(0.55, 0.25, 0.20)
+    mh = _dixon_coles_matrix(la, lb)
+    ih, jh = consistent_modal_score(mh, 0.55, 0.25, 0.20)
+    assert ih > jh
+    ix, jx = consistent_modal_score(mh, 0.20, 0.55, 0.25)   # forzamos empate
+    assert ix == jx

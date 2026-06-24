@@ -1,0 +1,37 @@
+date,equipos,home,away,resultado_real,prob_core_pre,surprise_score
+2026-06-15,España - Cabo Verde,Spain,Cape Verde,0-0 (X),0.1034,0.2299
+2026-06-12,Suiza - Catar,Switzerland,Qatar,1-1 (X),0.1088,0.2245
+2026-06-20,Ecuador - Curazao,Ecuador,Curaçao,0-0 (X),0.1756,0.1577
+2026-06-13,Costa de Marfil - Ecuador,Ivory Coast,Ecuador,1-0 (1),0.1983,0.135
+2026-06-17,Ghana - Panamá,Ghana,Panama,1-0 (1),0.2113,0.122
+2026-06-16,Portugal - RD Congo,Portugal,DR Congo,1-1 (X),0.2445,0.0889
+2026-06-12,Canadá - Bosnia y Her.,Canada,Bosnia and Herzegovina,1-1 (X),0.2536,0.0797
+2026-06-15,Arabia S. - Uruguay,Saudi Arabia,Uruguay,1-1 (X),0.2549,0.0784
+2026-06-18,Rep. Checa - Sudáfrica,Czech Republic,South Africa,1-1 (X),0.2584,0.0749
+2026-06-14,Irán - Nueva Zelanda,Iran,New Zealand,2-2 (X),0.2603,0.073
+2026-06-14,Bélgica - Egipto,Belgium,Egypt,1-1 (X),0.2614,0.0719
+2026-06-19,EEUU - Australia,United States,Australia,2-0 (1),0.2646,0.0687
+2026-06-13,EEUU - Paraguay,United States,Paraguay,4-1 (1),0.2732,0.0601
+2026-06-12,Brasil - Marruecos,Brazil,Morocco,1-1 (X),0.2849,0.0485
+2026-06-14,Países Bajos - Japón,Netherlands,Japan,2-2 (X),0.3042,0.0291
+2026-06-19,Turquía - Paraguay,Turkey,Paraguay,0-1 (2),0.3298,0.0035
+2026-06-13,Australia - Turquía,Australia,Turkey,2-0 (1),0.3425,-0.0091
+2026-06-14,Suecia - Túnez,Sweden,Tunisia,5-1 (1),0.3679,-0.0346
+2026-06-11,Corea del Sur - Rep. Checa,South Korea,Czech Republic,2-1 (1),0.4412,-0.1078
+2026-06-18,México - Corea del Sur,Mexico,South Korea,1-0 (1),0.4721,-0.1387
+2026-06-16,Austria - Jordania,Austria,Jordan,3-1 (1),0.4866,-0.1533
+2026-06-17,Inglaterra - Croacia,England,Croatia,4-2 (1),0.5118,-0.1785
+2026-06-12,Escocia - Haití,Scotland,Haiti,1-0 (1),0.5244,-0.191
+2026-06-19,Escocia - Marruecos,Scotland,Morocco,0-1 (2),0.5264,-0.1931
+2026-06-20,Alemania - Costa de Marfil,Germany,Ivory Coast,2-1 (1),0.5271,-0.1937
+2026-06-15,Francia - Senegal,France,Senegal,3-1 (1),0.5539,-0.2206
+2026-06-16,Argentina - Argelia,Argentina,Algeria,3-0 (1),0.5914,-0.2581
+2026-06-21,Túnez - Japón,Tunisia,Japan,0-4 (2),0.597,-0.2637
+2026-06-16,Colombia - Uzbekistán,Colombia,Uzbekistan,3-1 (1),0.6214,-0.2881
+2026-06-20,Países Bajos - Suecia,Netherlands,Sweden,5-1 (1),0.6636,-0.3303
+2026-06-15,Noruega - Irak,Norway,Iraq,4-1 (1),0.6642,-0.3309
+2026-06-11,México - Sudáfrica,Mexico,South Africa,2-0 (1),0.6947,-0.3614
+2026-06-18,Suiza - Bosnia y Her.,Switzerland,Bosnia and Herzegovina,4-1 (1),0.7283,-0.395
+2026-06-18,Canadá - Catar,Canada,Qatar,6-0 (1),0.7554,-0.4221
+2026-06-19,Brasil - Haití,Brazil,Haiti,3-0 (1),0.7761,-0.4428
+2026-06-13,Alemania - Curazao,Germany,Curaçao,7-1 (1),0.7931,-0.4598
